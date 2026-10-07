@@ -1,0 +1,150 @@
+"""Local chat and state inspector. Each browser session owns its conversation."""
+
+import json
+from datetime import UTC, date, datetime, time
+
+import streamlit as st
+
+from .model import create_model
+from .presentation import inspector
+from .reasoner import OpenRouterReasoner
+from .repository import FixtureRepository
+from .schemas.state import Event, Session
+from .workflow import build_workflow
+
+SAMPLE = (
+    "I'm the policyholder. My name is Margaret Chen, policy POL-9921. "
+    "I'm calling about my denied healthcare claim from January. "
+    "DOB is 1985-03-15, SSN last four is 4472."
+)
+
+
+def submit(event: Event) -> None:
+    try:
+        if "workflow" not in st.session_state:
+            st.session_state.workflow = build_workflow(
+                OpenRouterReasoner(create_model()), FixtureRepository()
+            )
+        result = st.session_state.workflow.invoke(
+            {
+                "session": st.session_state.conversation,
+                "event": event,
+            }
+        )
+    except Exception as error:  # noqa: BLE001 - one outer UI boundary, with a visible failure.
+        # UI boundary: do not display SDK request bodies, secrets, or partial graph state.
+        st.error(
+            f"The turn failed ({type(error).__name__}). Your conversation was not changed. "
+            "Check the OpenRouter key, model access, and structured-output support, then retry."
+        )
+        return
+    st.session_state.conversation = result["session"]
+    st.rerun()
+
+
+def controls(session: Session) -> None:
+    with st.sidebar:
+        st.subheader("Demo controls")
+        scenario = st.selectbox("Representative consent", ["default", "timeout"])
+        demo_date = st.date_input("New conversation date", value=date(2026, 3, 10))
+        if st.button("New conversation", use_container_width=True):
+            st.session_state.pop("workflow", None)
+            st.session_state.conversation = Session(
+                consent_scenario=scenario,
+                now=datetime.combine(demo_date, time(10), tzinfo=UTC),
+            )
+            st.rerun()
+        st.caption("Scenario and start date apply to new conversations.")
+        st.write(f"Clock: {session.now:%Y-%m-%d %H:%M:%S} UTC")
+        advance = st.selectbox(
+            "Advance by",
+            [10, 30, 120, 86400],
+            format_func=lambda n: f"{n} seconds" if n < 86400 else "1 day",
+        )
+        if st.button(
+            "Advance time", disabled=session.disposition != "active", use_container_width=True
+        ):
+            with st.spinner("Checking time-dependent conditions..."):
+                submit(Event(kind="advance_time", seconds=advance))
+        st.caption("The clock moves only with this control. Consent expires after 120 seconds.")
+        with st.expander("Margaret sample"):
+            st.code(SAMPLE, language=None)
+        st.caption(
+            "Use the sample fixture identities. No emails, transfers, or claim changes occur."
+        )
+
+
+def outcome_view(session: Session) -> None:
+    outcome = session.outcome
+    if not outcome.case_id and not outcome.handoff_reason:
+        return
+    st.subheader("Support outcome" if session.disposition != "active" else "Outcome so far")
+    if outcome.case_id:
+        st.write(f"**{outcome.case_id}** · {outcome.claim_status}")
+        st.write(outcome.claim_summary)
+    for title, entries in (("Discussed", outcome.discussed), ("Next steps", outcome.next_steps)):
+        if entries:
+            st.markdown(f"**{title}**")
+            for entry in entries:
+                st.markdown(f"- {entry.text}")
+    if outcome.unresolved_questions:
+        st.markdown("**Questions for human support**")
+        for question in outcome.unresolved_questions:
+            st.markdown(f"- {question}")
+    if outcome.handoff_reason:
+        st.info(f"Human support requested: {outcome.handoff_reason} No actual transfer was made.")
+    if session.follow_up.email_draft:
+        with st.expander("Email summary draft", expanded=session.disposition == "completed"):
+            st.caption(
+                f"Choice: {session.follow_up.email_choice}. Delivery is simulated; no email sent."
+            )
+            st.text(session.follow_up.email_draft)
+    if session.disposition != "active":
+        export = {
+            "outcome": outcome.model_dump(),
+            "email_choice": session.follow_up.email_choice,
+            "delivery": session.follow_up.delivery,
+            "disposition": session.disposition,
+        }
+        st.download_button(
+            "Download outcome",
+            json.dumps(export, indent=2),
+            file_name="support-outcome.json",
+            mime="application/json",
+        )
+
+
+def main() -> None:
+    st.set_page_config(page_title="Claims Support · SOP Demo", page_icon="💬", layout="wide")
+    if "conversation" not in st.session_state:
+        st.session_state.conversation = Session()
+    session = st.session_state.conversation
+    st.title("Claims support")
+    st.caption("A conversational SOP demo · LangGraph + OpenRouter · simulated follow-up")
+    controls(session)
+    chat, state_panel = st.columns([3, 2], gap="large")
+    with chat:
+        if not session.messages:
+            with st.chat_message("assistant"):
+                st.write(
+                    "Hello! I can help with your insurance claim. Tell me what you need, and we'll verify your identity before discussing claim details."
+                )
+        for message in session.messages:
+            with st.chat_message(message.role):
+                st.write(message.content)
+        text = st.chat_input(
+            "Message claims support", disabled=session.disposition != "active", max_chars=12000
+        )
+        if text:
+            with st.spinner("Working through your request..."):
+                submit(Event(text=text))
+        if session.disposition != "active":
+            st.success(
+                f"Conversation {session.disposition.replace('_', ' ')}. Start a new conversation to test another scenario."
+            )
+        outcome_view(session)
+    with state_panel:
+        st.subheader("Workflow state")
+        st.badge(session.phase.value, color="blue")
+        st.caption("Identity values are masked. This panel is for the demo tester.")
+        st.json(inspector(session), expanded=2)
