@@ -85,7 +85,7 @@ def controls(session: Session, *, model_ready: bool) -> None:
         st.write(f"Clock: {session.now:%Y-%m-%d %H:%M:%S} UTC")
         advance = st.selectbox(
             "Advance by",
-            [10, 30, 120, 86400],
+            [10, 30, 120, 180, 86400],
             format_func=lambda n: f"{n} seconds" if n < 86400 else "1 day",
         )
         if st.button(
@@ -96,7 +96,16 @@ def controls(session: Session, *, model_ready: bool) -> None:
         ):
             with st.spinner("Checking time-dependent conditions..."):
                 submit(Event(kind="advance_time", seconds=advance))
-        st.caption("The clock moves only with this control. Consent expires after 120 seconds.")
+        st.caption(
+            "The clock moves only with this control. Representative consent and the email-summary "
+            "choice each expire after 120 seconds. An expired email choice defaults to skip."
+        )
+        if session.disposition == "active":
+            seconds = int((session.inactivity_expires_at - session.now).total_seconds())
+            st.caption(f"Conversation timeout: {seconds} demo seconds remaining.")
+        if session.follow_up.offer_status == "pending" and session.follow_up.expires_at is not None:
+            seconds = int((session.follow_up.expires_at - session.now).total_seconds())
+            st.caption(f"Email choice: {seconds} demo seconds remaining; then skip automatically.")
         with st.expander("Margaret sample"):
             st.code(SAMPLE, language=None)
         st.caption(
@@ -152,6 +161,10 @@ def main() -> None:
     session = st.session_state.conversation
     st.title("Claims support")
     st.caption("A conversational SOP demo · LangGraph + OpenRouter · simulated follow-up")
+    st.caption(
+        "Conversations time out after 3 minutes without a caller message on the step timer. "
+        "Use Advance time to test; real elapsed time does not count. No email is sent on timeout."
+    )
     model_ready = connection_controls()
     if not model_ready:
         st.info("To start the demo, enter your API key under Connect to OpenRouter.")

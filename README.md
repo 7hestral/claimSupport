@@ -107,6 +107,15 @@ non-root user and excludes `.env`, local outputs, and development tools. Stop it
 4. When offered a summary, choose send or skip. Send creates an email draft and records simulated
    delivery. No email is sent. **Download outcome** exports the completed support result.
 
+The email choice defaults to skip after 120 seconds on the demo clock. To test it, leave the choice
+pending, select **120 seconds** under **Advance by**, and click **Advance time**. This completes
+the conversation without sending email. Real elapsed time does not advance this demo clock.
+
+In every phase, the conversation also times out after **180 seconds without a caller message**
+on the same step clock. Each caller message restarts that wait. Use **Advance time → 180 seconds**
+to test it. When a step crosses multiple deadlines, the earlier email or consent timeout applies
+first. The demo displays the rule and remaining conversation time.
+
 For a demo that pauses at verification and checks early memory, follow the
 [full walkthrough](docs/code/delivery-guide.md#walk-through-the-four-phases).
 

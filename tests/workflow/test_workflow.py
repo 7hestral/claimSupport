@@ -1,5 +1,7 @@
 """Public workflow contracts: phase gates, memory, authorized access, and outcomes."""
 
+from datetime import timedelta
+
 import pytest
 
 from apps.insurance_claims.data.repository import FixtureRepository
@@ -8,7 +10,7 @@ from apps.insurance_claims.schemas.state import DraftReply, Event, Phase
 
 
 @pytest.mark.parametrize("choice", ["send", "skip"])
-def test_full_conversation_requires_wrapup_and_explicit_email_choice(harness, margaret, choice):
+def test_full_conversation_accepts_explicit_email_choice_before_timeout(harness, margaret, choice):
     turn, _, _ = harness(
         margaret,
         Observation(conversation_action="ask_followup", topics=["submission"]),
@@ -29,6 +31,10 @@ def test_full_conversation_requires_wrapup_and_explicit_email_choice(harness, ma
     assert session.phase == Phase.POST_PROCESS
     assert session.follow_up.offer_status == "pending"
     assert session.disposition == "active"
+    deadline = session.follow_up.expires_at
+    session = turn(session, Event(kind="advance_time", seconds=119))
+    assert session.follow_up.expires_at == deadline
+    assert session.disposition == "active"
     session = turn(session)
     assert session.disposition == "completed"
     assert session.follow_up.choice == choice
@@ -39,6 +45,74 @@ def test_full_conversation_requires_wrapup_and_explicit_email_choice(harness, ma
     assert "no email was sent" in session.messages[-1].content.lower()
     with pytest.raises(ValueError, match="closed"):
         turn(session)
+
+
+@pytest.mark.parametrize("early_choice", ["unknown", "send"])
+def test_email_timeout_skips_without_confirmation_or_model_call(harness, margaret, early_choice):
+    margaret.email_choice = early_choice
+    turn, model, _ = harness(margaret, Observation(conversation_action="finish_case"))
+    session = turn()
+    session = turn(session, Event(kind="advance_time", seconds=120))
+    assert session.disposition == "active"
+    assert session.follow_up.expires_at is None
+    session = turn(session)
+    deadline = session.now + timedelta(seconds=120)
+    assert session.follow_up.expires_at == deadline
+    assert session.follow_up.choice == early_choice
+    session = turn(session, Event(kind="advance_time", seconds=119))
+    assert session.follow_up.offer_status == "pending"
+    assert session.follow_up.expires_at == deadline
+    draft = session.follow_up.email_draft
+    calls = len(model.contexts)
+    session = turn(session, Event(kind="advance_time", seconds=1))
+    assert session.disposition == "completed"
+    assert session.follow_up.choice == "skip"
+    assert session.follow_up.offer_status == "timed_out"
+    assert session.follow_up.delivery == "not_requested"
+    assert session.follow_up.email_draft == draft
+    assert len(model.contexts) == calls
+    assert "no email was sent" in session.messages[-1].content.lower()
+    with pytest.raises(ValueError, match="closed"):
+        turn(session, Event(text="Send it after all"))
+
+
+def test_new_question_renews_email_wait_without_accepting_send(harness, margaret):
+    turn, _, _ = harness(
+        margaret,
+        Observation(conversation_action="finish_case"),
+        Observation(conversation_action="ask_followup", email_choice="send", topics=["receipt"]),
+    )
+    session = turn(turn())
+    old_deadline = session.follow_up.expires_at
+    session = turn(session, Event(kind="advance_time", seconds=119))
+    session = turn(session)
+    assert session.last_action == "answer_then_offer_email"
+    assert session.follow_up.choice == "send"
+    assert session.follow_up.delivery == "not_requested"
+    assert session.follow_up.expires_at == session.now + timedelta(seconds=120)
+    assert session.follow_up.expires_at > old_deadline
+    session = turn(session, Event(kind="advance_time", seconds=1))
+    assert session.follow_up.offer_status == "pending"
+    session = turn(session, Event(kind="advance_time", seconds=119))
+    assert session.follow_up.choice == "skip"
+    assert session.follow_up.offer_status == "timed_out"
+
+
+@pytest.mark.parametrize("case_id", ["CL-2048", "CL-2011"])
+def test_case_resolution_cancels_previous_email_wait(harness, margaret, case_id):
+    turn, _, _ = harness(
+        margaret,
+        Observation(conversation_action="finish_case"),
+        Observation(case_hints=CaseHints(case_id=case_id), conversation_action="ask_followup"),
+    )
+    session = turn(turn())
+    assert session.follow_up.expires_at is not None
+    session = turn(session)
+    assert session.phase == Phase.PROCESS_CASE
+    assert session.follow_up.offer_status == "not_offered"
+    assert session.follow_up.expires_at is None
+    session = turn(session, Event(kind="advance_time", seconds=120))
+    assert session.disposition == "active"
 
 
 def test_early_case_hint_survives_partial_identity_without_claim_access(harness, margaret):

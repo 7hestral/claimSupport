@@ -190,12 +190,33 @@ zero or an estimate. Fixed replies do not generate a response-call trace.
 | VERIFY_ID | Three matching PII fields, one customer, no supplied conflicts; representative consent if needed |
 | RESOLVE_INTENT | Exactly one authorized matching case; the speaker uses dialogue to understand or clarify the need |
 | PROCESS_CASE | A discussed outcome and caller readiness without another follow-up question |
-| POST_PROCESS | Explicit send or skip after the offer |
+| POST_PROCESS | Explicit send/skip after the offer, or timeout with automatic skip |
 
 An identity correction restarts verification. An explicit case change restarts case resolution.
 Follow-up questions during the summary offer remain in POST_PROCESS and are answered before renewing
 the offer. Human requests and explicit conversation exits are terminal dispositions outside normal
 phase progression. Neither path grants access or claims that an external action succeeded.
+
+The email choice starts a 120-second wait on the demo clock when first offered.
+`follow_up.expires_at` records its deadline. At or after that deadline, code sets `choice=skip`,
+`offer_status=timed_out`, `delivery=not_requested`, and `disposition=completed`. This overrides an
+unconfirmed early send preference and uses a fixed reply without a model call. Timeout is not
+caller confirmation. The existing draft and support outcome remain available.
+
+A new claim question is answered before renewing the offer with a fresh 120 seconds. Clock
+reminders preserve the deadline. Identity changes clear the offer; case resolution cancels the
+old wait, including when updated hints resolve to the same case. Failed turns commit neither the
+answer nor a renewed deadline. Expiry uses **Advance time**, with no background wall-clock timer.
+
+All phases also have a 180-second inactivity deadline, `inactivity_expires_at`, initialized from
+the session's demo time. A caller-message turn renews it; clock events and UI reruns do not. At
+expiry, code sets `disposition=timed_out`, defaults email to skip, and returns a fixed closing
+reply without model generation. Later turns are rejected until a new conversation starts.
+Failed turns retain the previous deadline along with the previous business state.
+
+Policy checks expiry before business routing. An earlier pending email or representative-consent
+deadline takes precedence when one clock step crosses multiple deadlines. The remaining time is
+visible in the sidebar. There is no real-time inactivity timer.
 
 ## Data and time
 

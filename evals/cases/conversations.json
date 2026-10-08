@@ -297,5 +297,115 @@
         }
       }
     ]
+  },
+  {
+    "id": "email_timeout",
+    "review": "Explain the optional email summary and its skip-on-timeout behavior. A remembered send preference is not confirmation. The demo clock controls expiry, not real elapsed time. Answer a new receipt question before renewing the waiting period, preserving receipt uncertainty. Clock reminders must not restart the wait. At expiry, say the choice timed out and email was skipped, without claiming the caller chose skip or any email was sent. Keep the support summary available.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. DOB 1985-03-15, SSN last four 4472. Why was my January healthcare claim denied? Please email me a summary at the end."
+        },
+        "expect": {
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048",
+          "session.follow_up.choice": "send",
+          "session.follow_up.offer_status": "not_offered",
+          "session.follow_up.expires_at": null
+        }
+      },
+      {
+        "event": {
+          "text": "That answers my questions. I'm ready to finish."
+        },
+        "expect": {
+          "session.phase": "POST_PROCESS",
+          "session.follow_up.offer_status": "pending",
+          "session.disposition": "active"
+        },
+        "present": [
+          "session.follow_up.expires_at"
+        ]
+      },
+      {
+        "event": {
+          "kind": "advance_time",
+          "seconds": 60
+        },
+        "expect": {
+          "session.follow_up.offer_status": "pending",
+          "session.follow_up.choice": "send",
+          "session.follow_up.delivery": "not_requested",
+          "session.disposition": "active"
+        }
+      },
+      {
+        "event": {
+          "text": "Before the summary, how would I know you received my uploaded documents?"
+        },
+        "expect": {
+          "session.last_action": "answer_then_offer_email",
+          "session.follow_up.offer_status": "pending",
+          "session.follow_up.delivery": "not_requested",
+          "session.disposition": "active"
+        }
+      },
+      {
+        "event": {
+          "kind": "advance_time",
+          "seconds": 119
+        },
+        "expect": {
+          "session.follow_up.offer_status": "pending",
+          "session.follow_up.delivery": "not_requested",
+          "session.disposition": "active"
+        }
+      },
+      {
+        "event": {
+          "kind": "advance_time",
+          "seconds": 1
+        },
+        "expect": {
+          "session.last_action": "email_timeout",
+          "session.follow_up.offer_status": "timed_out",
+          "session.follow_up.choice": "skip",
+          "session.follow_up.delivery": "not_requested",
+          "session.disposition": "completed"
+        },
+        "present": [
+          "session.follow_up.email_draft"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "inactivity_timeout",
+    "review": "After verified claim support, advance the step clock three minutes without another caller message. End the conversation with a fixed timeout notice and skip email without claiming caller consent or sending. Preserve the grounded support outcome. Real elapsed time is not involved.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. DOB 1985-03-15, SSN last four 4472. Why was my January healthcare claim denied?"
+        },
+        "expect": {
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048",
+          "session.disposition": "active"
+        }
+      },
+      {
+        "event": {
+          "kind": "advance_time",
+          "seconds": 180
+        },
+        "expect": {
+          "session.disposition": "timed_out",
+          "session.last_action": "inactivity_timeout",
+          "session.follow_up.choice": "skip",
+          "session.follow_up.delivery": "not_requested",
+          "session.selected_case_id": "CL-2048"
+        }
+      }
+    ]
   }
 ]

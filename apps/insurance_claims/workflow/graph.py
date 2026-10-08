@@ -10,7 +10,7 @@ from ..data.repository import FixtureRepository
 from ..llm.reasoner import Reasoner
 from ..observability.monitoring import record_decision
 from ..schemas.facts import Observation
-from ..schemas.state import DraftReply, Event, Message, Session
+from ..schemas.state import INACTIVITY_TIMEOUT_SECONDS, DraftReply, Event, Message, Session
 from .memory import merge_memory
 from .policy import TurnPlan, plan_turn
 from .presentation import response_context, save_response
@@ -35,9 +35,14 @@ def build_workflow(reasoner: Reasoner, repository: FixtureRepository):
                 raise ValueError("Advance time requires a positive duration.")
             session.now += timedelta(seconds=event.seconds)
             observation = Observation()
+        elif session.now >= session.inactivity_expires_at:
+            observation = Observation()
         else:
             if not event.text.strip() or len(event.text) > 12000:
                 raise ValueError("Enter a message between 1 and 12000 characters.")
+            session.inactivity_expires_at = session.now + timedelta(
+                seconds=INACTIVITY_TIMEOUT_SECONDS
+            )
             session.messages.append(Message(role="user", content=event.text.strip()))
             observation = reasoner.interpret(session, emit=writer)
             merge_memory(session, observation)

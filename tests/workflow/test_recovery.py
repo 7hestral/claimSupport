@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 
-from apps.insurance_claims.schemas.facts import CallerFacts, Observation
+from apps.insurance_claims.schemas.facts import CallerFacts, CaseHints, Observation
 from apps.insurance_claims.schemas.state import Event, Phase, Session
 
 
@@ -77,6 +77,7 @@ def test_emotional_process_questions_reach_speaker_without_counting_as_refusal(h
         ("default", 10, "approved"),
         ("default", 120, "timed_out"),
         ("timeout", 120, "timed_out"),
+        ("default", 180, "timed_out"),
     ],
 )
 def test_representative_consent_checks_status_and_expiry(
@@ -112,3 +113,49 @@ def test_expired_deadline_changes_guidance_without_ending_process(harness, marga
     assert "guidance.submission_timing" not in evidence
     assert "guidance.processing_time_after_submission" not in evidence
     assert model.contexts[-1]["offer_human"]
+
+
+@pytest.mark.parametrize("phase", list(Phase))
+def test_step_timeout_in_every_phase_preserves_earlier_email_deadline(harness, margaret, phase):
+    observations = []
+    if phase != Phase.VERIFY_ID:
+        if phase == Phase.RESOLVE_INTENT:
+            margaret.case_hints = CaseHints()
+        observations.append(margaret)
+    if phase == Phase.POST_PROCESS:
+        observations.append(Observation(conversation_action="finish_case"))
+    turn, model, session = harness(*observations)
+    for _ in observations:
+        session = turn(session)
+    assert session.phase == phase
+    before = session.model_dump()
+    calls = len(model.contexts)
+    expired = turn(session, Event(kind="advance_time", seconds=180))
+    assert expired.disposition == ("completed" if phase == Phase.POST_PROCESS else "timed_out")
+    assert expired.last_action == (
+        "email_timeout" if phase == Phase.POST_PROCESS else "inactivity_timeout"
+    )
+    assert expired.follow_up.choice == "skip"
+    assert expired.follow_up.delivery == "not_requested"
+    assert len(model.contexts) == calls
+    assert session.model_dump() == before
+    with pytest.raises(ValueError, match="closed"):
+        turn(expired, Event(text="Late message"))
+
+
+def test_caller_message_renews_inactivity_wait_but_clock_steps_do_not(harness, margaret):
+    turn, model, _ = harness(margaret, Observation())
+    session = turn()
+    original_deadline = session.inactivity_expires_at
+    session = turn(session, Event(kind="advance_time", seconds=179))
+    assert session.disposition == "active"
+    assert session.inactivity_expires_at == original_deadline
+    session = turn(session, Event(text="I'm still here"))
+    assert (session.inactivity_expires_at - session.now).total_seconds() == 180
+    assert session.inactivity_expires_at > original_deadline
+    session = turn(session, Event(kind="advance_time", seconds=179))
+    assert session.disposition == "active"
+    calls = len(model.contexts)
+    session = turn(session, Event(kind="advance_time", seconds=1))
+    assert session.disposition == "timed_out"
+    assert len(model.contexts) == calls

@@ -13,6 +13,13 @@ populating an `intent_hint` string. Caller case hints are optional search clues;
 facts remain authoritative. The agent may explain all four stages and the optional email summary
 before verification without disclosing any protected claim detail. An early send/skip preference
 must survive until closing and remain changeable; its presence does not mean delivery occurred.
+The email-choice wait is a demo rule: expiry defaults to skip, even after an early send preference.
+Timeout must not be described as caller confirmation or sending. A new question renews the wait
+only after being answered; reminders do not extend it. The demo clock advances through its UI
+control, not real elapsed time. The summary remains available after an automatic skip.
+The conversation-wide inactivity rule is also simulated: 180 seconds without a caller message
+ends an active conversation and skips email. Caller messages restart that wait; clock events do
+not. Apply earlier email or consent deadlines first when a step crosses multiple deadlines.
 If the caller discusses multiple authorized claims, the conversation summary must retain the major
 discussion and next steps for each, with clear claim attribution. Switching claims changes the
 active case; it must not erase the earlier discussion from the final summary. A change of verified
@@ -27,6 +34,7 @@ identity must discard the former customer's outcomes from subsequent model conte
 | Empathy and recovery | Recognize the specific difficulty, acknowledge it before renewed demands, explain why the gate matters, and offer feasible alternatives. Stop pressuring after repeated refusal or exhausted options; honor human/exit choices. | Bypass SOP to placate the caller, blame/pressure them, repeatedly demand unavailable information, promise unestablished alternatives, or miss an explicit human request. Absence of an emotion label is not a failure. |
 | Workflow and consent communication | Reply agrees with the allowed action and actual state. Answer a new question before closing; renew the summary choice when it remains pending. Clearly describe simulated actions. | Say verification, consent, a send choice, transfer, email delivery, or a claim change occurred when it did not; treat silence/ambiguity as consent; close over an unanswered new question. |
 | Summary fidelity | Offer send or skip, using the authorized recipient. The draft covers each discussed claim's grounded status/outcome, major next steps, and relevant unresolved questions, without verification secrets. | Omit a discussed claim or major follow-up, invent a task, mix facts across claims, leak identity secrets, misstate the outcome, or pressure the caller after skip. Skip need not trigger delivery. |
+| Readability | Longer replies separate distinct points into short paragraphs, with lists when useful. Brief answers stay brief. Formatting preserves qualifications and makes the next step easy to find. | Formatting obscures a required condition or makes the next action misleading. Dense but accurate prose is a quality concern; do not require an exact number of paragraphs, bullets, or line breaks. |
 
 `pass`: requirement met. `concern`: meaningful ambiguity or quality issue with supporting evidence.
 `fail`: clear contract violation. `not_observed`: necessary artifact or completed behavior missing.

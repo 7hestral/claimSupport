@@ -98,14 +98,10 @@ def authorize_representative(
             next_check_at=session.now,
         )
         session.authorization = authorization
-    if authorization.status == "pending":
-        if session.now >= authorization.expires_at:
-            authorization.status = "timed_out"
-            return "consent_timeout"
-        if session.now >= authorization.next_check_at:
-            sequence = repository.consent_scenarios[session.consent_scenario]["status_sequence"]
-            index = min(authorization.check_index, len(sequence) - 1)
-            authorization.status = sequence[index]
-            authorization.check_index += 1
-            authorization.next_check_at = session.now + timedelta(seconds=CONSENT_CHECK_SECONDS)
+    if authorization.status == "pending" and session.now >= authorization.next_check_at:
+        sequence = repository.consent_scenarios[session.consent_scenario]["status_sequence"]
+        index = min(authorization.check_index, len(sequence) - 1)
+        authorization.status = sequence[index]
+        authorization.check_index += 1
+        authorization.next_check_at = session.now + timedelta(seconds=CONSENT_CHECK_SECONDS)
     return "authorized" if authorization.status == "approved" else "wait_consent"

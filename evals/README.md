@@ -68,6 +68,8 @@ whether the agent merely acknowledges a caller's statement or asserts an actual 
 | `anxiety`, `confusion`, `anger`, `refusal` | Emotional acknowledgment, explanations, alternate PII, stopping persuasion |
 | `consent`, `consent_timeout` | Representative consent, multiple pending polls, attempted bypass, approval/expiry |
 | `followup` | Thanks plus a question, email choice plus a question, renewed choice |
+| `email_timeout` | Early send preference, clock reminders, a new question renewing the wait, and automatic skip on expiry without delivery |
+| `inactivity_timeout` | Three-minute conversation expiry on the step clock, with email skipped and no model-generated closing |
 
 Offline tests additionally cover cross-customer claim isolation, three failed identity attempts,
 early email preferences, model errors/atomic updates, long conversations, streaming, and UI state.

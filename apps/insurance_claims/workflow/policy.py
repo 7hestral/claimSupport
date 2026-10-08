@@ -1,5 +1,7 @@
 """Deterministic turn policy: authorization, bounded case selection, and closing."""
 
+from datetime import timedelta
+
 from pydantic import Field
 
 from ..data.repository import FixtureRepository
@@ -8,6 +10,8 @@ from ..schemas.state import Evidence, FollowUp, Outcome, Phase, Session
 from .guidance import claim_evidence
 from .identity import IDENTITY_FIELDS, authorize_representative, verify
 from .memory import transition
+
+EMAIL_CHOICE_TIMEOUT_SECONDS = 120
 
 
 class TurnPlan(StrictModel):
@@ -58,8 +62,6 @@ def identity_plan(
         )
     if session.memory.caller_role == "representative":
         action = authorize_representative(session, customer, repository)
-        if action == "consent_timeout":
-            return handoff(session, "Representative consent expired while pending.")
         if action != "authorized":
             return TurnPlan(
                 action=action,
@@ -112,6 +114,8 @@ def resolve_case(session: Session, repository: FixtureRepository) -> TurnPlan | 
             Outcome(case_id=claim.case_id, claim_status=claim.status, claim_summary=claim.summary),
         )
         session.follow_up = FollowUp(choice=session.follow_up.choice)
+    session.follow_up.offer_status = "not_offered"
+    session.follow_up.expires_at = None
     transition(session, Phase.PROCESS_CASE)
     return None
 
@@ -119,6 +123,47 @@ def resolve_case(session: Session, repository: FixtureRepository) -> TurnPlan | 
 def plan_turn(
     session: Session, observation: Observation, repository: FixtureRepository
 ) -> TurnPlan:
+    follow_up = session.follow_up
+    if (
+        session.phase == Phase.POST_PROCESS
+        and follow_up.offer_status == "pending"
+        and follow_up.expires_at is not None
+        and session.now >= follow_up.expires_at
+        and follow_up.expires_at <= session.inactivity_expires_at
+    ):
+        follow_up.choice = "skip"
+        follow_up.offer_status = "timed_out"
+        follow_up.delivery = "not_requested"
+        session.disposition = "completed"
+        return TurnPlan(
+            action="email_timeout",
+            fixed_reply=(
+                "The email-summary choice timed out on the demo clock, so I've skipped the email. "
+                "No email was sent. Your support summary and next steps are available below."
+            ),
+        )
+    authorization = session.authorization
+    if (
+        authorization.status == "pending"
+        and authorization.expires_at is not None
+        and session.now >= authorization.expires_at
+        and authorization.expires_at <= session.inactivity_expires_at
+    ):
+        authorization.status = "timed_out"
+        return handoff(session, "Representative consent expired while pending.")
+    if session.now >= session.inactivity_expires_at:
+        follow_up.choice = "skip"
+        follow_up.delivery = "not_requested"
+        if follow_up.offer_status == "pending":
+            follow_up.offer_status = "timed_out"
+        session.disposition = "timed_out"
+        return TurnPlan(
+            action="inactivity_timeout",
+            fixed_reply=(
+                "This conversation timed out after 3 minutes without a caller message on the "
+                "demo clock. No email was sent. Start a new conversation to continue."
+            ),
+        )
     if observation.conversation_action == "request_human":
         return handoff(session, "Caller requested human support.")
     if observation.conversation_action == "end_conversation":
@@ -150,11 +195,15 @@ def plan_turn(
         if observation.conversation_action == "finish_case" and session.outcome.discussed:
             transition(session, Phase.POST_PROCESS)
             session.follow_up.offer_status = "pending"
+            session.follow_up.expires_at = session.now + timedelta(
+                seconds=EMAIL_CHOICE_TIMEOUT_SECONDS
+            )
             customer = repository.customer(session.verification.verified_party_id)
             session.follow_up.recipient = customer.email
             return TurnPlan(action="offer_email", evidence=evidence, offer_human=offer_human)
         return TurnPlan(action="answer_case", evidence=evidence, offer_human=offer_human)
     if observation.conversation_action == "ask_followup":
+        session.follow_up.expires_at = session.now + timedelta(seconds=EMAIL_CHOICE_TIMEOUT_SECONDS)
         return TurnPlan(
             action="answer_then_offer_email", evidence=evidence, offer_human=offer_human
         )

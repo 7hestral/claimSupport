@@ -2,6 +2,42 @@
 
 Results are tied to the runs described below. Earlier runs do not validate later cases or revisions.
 
+## Conversation inactivity on the step clock — October 8, 2026
+
+The user requested a three-minute timeout in every phase and clarified that it must use the step
+timer. The session now records a 180-second inactivity deadline. Caller messages reset it; clock
+steps do not. Earlier email/consent deadlines win when one step crosses several deadlines. The
+demo displays the rule, remaining time, and a 180-second advance option. No real-time timer runs.
+
+All 112 offline tests passed, along with lint/format/diff checks. A fresh Sonnet 5.5 run of
+`inactivity_timeout` passed both state checks. Implementing-agent review confirmed a grounded
+claim reply followed by a fixed timeout notice and skipped email. Other phases and deadline
+ordering were tested offline. Evidence and self-review: `outputs/inactivity-timeout/`.
+
+## Email-choice timeout — October 8, 2026
+
+The user requested automatic skip when the email choice times out. The demo now waits 120 seconds
+on its controlled clock, records `timed_out` separately from caller confirmation, and never sends
+on silence. A new question renews the wait; clock reminders do not. The UI displays time remaining.
+
+All 104 offline tests and lint/format checks passed. A fresh Sonnet 5.5 run of `upfront` and
+`email_timeout` passed all 9 state checks. Implementing-agent review confirmed consent, skip, and
+summary behavior. One countdown reminder remains overly repetitive and exposes internal wording;
+that readability concern is recorded separately from the functional pass. Evidence, source hashes,
+and self-review are in `outputs/email-timeout/`. No wall-clock scheduler or full-suite acceptance
+was claimed.
+
+## Chat readability — October 8, 2026
+
+The shared response prompt now asks for short paragraphs separated by blank lines, grouping the
+explanation, next steps, and closing question. Lists are optional; simple answers stay brief.
+The rubric treats readability semantically without exact paragraph or line-break requirements.
+
+All 97 offline tests passed. A fresh Sonnet 5.5 run of `compound_followup` and `upfront` passed
+all 8 state checks. Implementing-agent review of all replies and both email drafts found readable
+paragraph grouping with the relevant qualifications preserved. This is limited self-review,
+not full-suite or default-model acceptance. Evidence and review: `outputs/readability/`.
+
 ## Prompt simplification and Sonnet 5.5 comparison — October 8, 2026
 
 Created checkpoint `df4b6d4` before simplifying conversation instructions. Common rules, grounding,

@@ -33,7 +33,13 @@ def response_context(
         "outcome": session.outcome.model_dump()
         if session.selected_case_id
         else Outcome().model_dump(),
-        "follow_up": session.follow_up.model_dump(),
+        "follow_up": session.follow_up.model_dump(mode="json"),
+        "email_choice_seconds_remaining": (
+            int((session.follow_up.expires_at - session.now).total_seconds())
+            if session.follow_up.offer_status == "pending"
+            and session.follow_up.expires_at is not None
+            else None
+        ),
         "prior_outcomes": [o.model_dump() for o in session.prior_outcomes.values()]
         if session.phase == Phase.POST_PROCESS
         else [],
@@ -110,6 +116,7 @@ def inspector(session: Session) -> dict:
         "phase_history": [phase.value for phase in session.phase_history],
         "disposition": session.disposition,
         "demo_time": session.now.isoformat(),
+        "inactivity_expires_at": session.inactivity_expires_at.isoformat(),
         "memory": session.memory.model_dump(mode="json"),
         "case_hints": session.case_hints.model_dump(mode="json"),
         "pending_topics": session.pending_topics,
@@ -125,5 +132,8 @@ def inspector(session: Session) -> dict:
         "last_action": session.last_action,
         "email_choice": session.follow_up.choice,
         "email_offer_status": session.follow_up.offer_status,
+        "email_choice_expires_at": (
+            session.follow_up.expires_at.isoformat() if session.follow_up.expires_at else None
+        ),
         "delivery": session.follow_up.delivery,
     }

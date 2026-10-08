@@ -1,6 +1,6 @@
 """Application-owned session state and bounded model response contracts."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Literal
 from uuid import uuid4
@@ -8,6 +8,8 @@ from uuid import uuid4
 from pydantic import Field
 
 from .facts import CallerFacts, CaseHints, IdentityField, OutputModel, StrictModel, Topic
+
+INACTIVITY_TIMEOUT_SECONDS = 180
 
 
 class Phase(StrEnum):
@@ -56,7 +58,8 @@ class Outcome(StrictModel):
 
 class FollowUp(StrictModel):
     choice: Literal["unknown", "send", "skip"] = "unknown"
-    offer_status: Literal["not_offered", "pending", "confirmed"] = "not_offered"
+    offer_status: Literal["not_offered", "pending", "confirmed", "timed_out"] = "not_offered"
+    expires_at: datetime | None = None
     recipient: str | None = None
     email_draft: str | None = None
     delivery: Literal["not_requested", "simulated_only"] = "not_requested"
@@ -78,8 +81,13 @@ class Session(StrictModel):
     follow_up: FollowUp = Field(default_factory=FollowUp)
     out_of_scope_attempts: int = 0
     recovery_attempts: int = 0
-    disposition: Literal["active", "completed", "handoff_requested", "ended"] = "active"
+    disposition: Literal["active", "completed", "handoff_requested", "ended", "timed_out"] = (
+        "active"
+    )
     now: datetime = Field(default_factory=lambda: datetime(2026, 3, 10, 10, tzinfo=UTC))
+    inactivity_expires_at: datetime = Field(
+        default_factory=lambda data: data["now"] + timedelta(seconds=INACTIVITY_TIMEOUT_SECONDS)
+    )
     consent_scenario: Literal["default", "timeout"] = "default"
     phase_history: list[Phase] = Field(default_factory=lambda: [Phase.VERIFY_ID])
     last_action: str = "collect_identity"

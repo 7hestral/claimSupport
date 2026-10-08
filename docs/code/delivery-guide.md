@@ -109,6 +109,28 @@ ambiguous dates require clarification. The scenario collection also covers natio
 claims, unavailable answers, early email choices, and follow-up questions at closing. See the
 [coverage catalog](../../evals/README.md#coverage).
 
+## Demonstrate conversation timeout
+
+1. Start a new conversation, or leave an active claim conversation waiting for the caller.
+2. Under **Advance by**, select **180 seconds**, then click **Advance time**.
+3. Confirm that the conversation is `timed_out`, email is skipped, and chat is disabled.
+4. Click **New conversation** to start again with a fresh three-minute wait.
+
+The rule applies in every phase. Caller messages reset the wait; clock steps and UI reruns do not.
+If an email or representative-consent deadline occurs earlier, that timeout takes precedence.
+The notice above chat and the sidebar explain the rule. Real elapsed time does not count.
+
+## Demonstrate email-choice timeout
+
+1. Reach the email-summary offer and leave the send/skip choice unanswered.
+2. Under **Advance by**, select **120 seconds**, then click **Advance time**.
+3. Confirm that the conversation completes with email choice `skip`, offer status `timed_out`,
+   and delivery `not_requested`. The support summary remains available. No email is sent.
+
+The sidebar shows the remaining demo seconds. Reminders do not extend the wait. A new claim
+question is answered before a fresh waiting period starts. A remembered send preference does not
+override timeout. Time moves only through **Advance time**, not by waiting two real minutes.
+
 ## Demonstrate representative consent
 
 1. In **Demo controls**, select `default` for **Representative consent**, then click
@@ -190,7 +212,7 @@ survive masking. Use the synthetic fixtures. Langfuse cost totals depend on its 
 | No early disclosure | Guarded claim reads; extractor has no claim records. Review replies too. |
 | Early memory | Caller facts and case hints persist across verification and consent. |
 | Grounded processing | Responses receive authorized evidence; references are validated. |
-| Optional follow-up | Explicit send/skip choice; draft and delivery state are separate. |
+| Optional follow-up | Explicit send/skip, or automatic skip on timeout; draft and delivery state are separate. |
 | Scope limits | Model classifies scope; code refuses and counts unrelated retries. |
 | Bonus empathy and recovery | Prompts guide empathy; code controls refusal and handoff. |
 
