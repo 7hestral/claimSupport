@@ -21,8 +21,7 @@ from apps.insurance_claims.schemas.state import DraftReply, Session
 def test_payment_evidence_preserves_expected_allowed_paid_and_fee(
     harness, margaret, case_id, amounts
 ):
-    margaret.facts.case_id = case_id
-    margaret.topic = "payment"
+    margaret.case_hints.case_id = case_id
     turn, model, _ = harness(margaret)
     turn()
     evidence = {entry["id"]: entry["text"] for entry in model.contexts[-1]["evidence"]}
@@ -37,27 +36,22 @@ def test_payment_evidence_preserves_expected_allowed_paid_and_fee(
 def test_submission_target_is_bounded_and_distinct_from_processing_time(
     harness, margaret, day, target
 ):
-    margaret.topic = "submission_timing"
+    margaret.topics = ["submission_timing", "processing_time"]
     turn, model, _ = harness(
         margaret,
-        Observation(topic="processing_time", conversation_action="ask_followup"),
         session=Session(now=datetime(2026, 3, day, tzinfo=UTC)),
     )
-    session = turn()
+    turn()
     evidence = {entry["id"]: entry["text"] for entry in model.contexts[-1]["evidence"]}
     assert target in evidence["guidance.submission_timing"]
-    assert "guidance.processing_time_after_submission" not in evidence
-    turn(session)
-    evidence = {entry["id"]: entry["text"] for entry in model.contexts[-1]["evidence"]}
     assert "usually less than a week" in evidence["guidance.processing_time_after_submission"]
-    assert "guidance.submission_timing" not in evidence
 
 
 def test_exhausted_document_alternatives_offer_human_without_mutating_claim(harness, margaret):
     turn, model, _ = harness(
         margaret,
-        Observation(topic="alternatives", conversation_action="ask_followup"),
-        Observation(topic="alternatives", alternatives_exhausted=True),
+        Observation(conversation_action="ask_followup", topics=["alternatives"]),
+        Observation(alternatives_exhausted=True, topics=["alternatives"]),
     )
     session = turn(turn())
     evidence = {entry["id"] for entry in model.contexts[-1]["evidence"]}
@@ -83,7 +77,7 @@ def test_summary_preserves_status_discussion_next_steps_and_unresolved_question(
         reply="The requested documents are missing; request copies from the provider. "
         "The record does not identify your adjuster.",
         discussed_evidence_ids=["claim.denial"],
-        next_step_evidence_ids=["step.documents"],
+        next_step_evidence_ids=["step.documents"] if context["action"] == "answer_case" else [],
         unanswered_question=question,
     )
     session = turn(turn(turn()))
@@ -95,3 +89,46 @@ def test_summary_preserves_status_discussion_next_steps_and_unresolved_question(
     assert question in draft
     assert "4472" not in draft
     assert "1985-03-15" not in draft
+
+
+def test_early_topics_accumulate_then_receipt_loads_only_current_guidance(harness, margaret):
+    partial = margaret.model_copy(deep=True)
+    partial.facts.dob = None
+    partial.facts.id_last4 = None
+    partial.topics = ["format", "processing_time", "format"]
+    identity = Observation(facts=margaret.facts)
+    turn, model, _ = harness(
+        partial,
+        Observation(topics=["processing_time"]),
+        identity,
+        Observation(topics=["receipt", "receipt"], conversation_action="ask_followup"),
+    )
+    session = turn(turn())
+    assert session.pending_topics == ["format", "processing_time"]
+    assert model.contexts[-1]["evidence"] == []
+    session = turn(session)
+    evidence = {e["id"] for e in model.contexts[-1]["evidence"]}
+    assert len(evidence) == len(model.contexts[-1]["evidence"])
+    assert {
+        "guidance.document_guidance.pathology_report",
+        "guidance.processing_time_after_submission",
+    } <= evidence
+    assert "guidance.receipt_confirmation" not in evidence
+    assert session.pending_topics == []
+    assert session.outcome.topics == ["format", "processing_time"]
+
+    session = turn(session)
+    evidence = {e["id"] for e in model.contexts[-1]["evidence"]}
+    assert "guidance.receipt_confirmation" in evidence
+    assert (
+        not {
+            "guidance.document_guidance.pathology_report",
+            "guidance.processing_time_after_submission",
+            "claim.net_pay",
+        }
+        & evidence
+    )
+    assert session.outcome.topics == ["format", "processing_time", "receipt"]
+    assert "guidance.document_guidance.pathology_report" in {
+        e.id for e in session.outcome.discussed
+    }

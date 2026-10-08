@@ -18,7 +18,29 @@ def test_untrusted_output_cannot_reference_unauthorized_evidence(harness, margar
     assert initial.outcome.case_id is None
 
 
-def test_conversations_are_isolated_and_debug_state_masks_identity(harness, margaret):
+@pytest.mark.parametrize(
+    "reference,accepted",
+    [("guidance.document_guidance.pathology_report", True), ("claim.status", False)],
+)
+def test_next_steps_can_use_authorized_guidance_but_not_claim_facts(
+    harness, margaret, reference, accepted
+):
+    margaret.topics = ["format"]
+    turn, model, _ = harness(margaret)
+    model.respond = lambda context, **kwargs: DraftReply(
+        reply="Prepare a complete readable copy, confirming any original requirement with support.",
+        discussed_evidence_ids=["guidance.document_guidance.pathology_report"],
+        next_step_evidence_ids=[reference],
+    )
+    if accepted:
+        session = turn()
+        assert [entry.id for entry in session.outcome.next_steps] == [reference]
+    else:
+        with pytest.raises(ValueError, match="outside the allowed guidance"):
+            turn()
+
+
+def test_conversations_are_isolated_and_debug_state_shows_caller_values(harness, margaret):
     turn, _, initial = harness(margaret)
     finished_turn = turn()
     other = Session()
@@ -26,9 +48,9 @@ def test_conversations_are_isolated_and_debug_state_masks_identity(harness, marg
     assert other.verification.verified_party_id is None
     assert other.session_id != finished_turn.session_id
     view = str(inspector(finished_turn))
-    assert "4472" not in view
-    assert "1985-03-15" not in view
-    assert "Margaret Chen" not in view
+    assert "4472" in view
+    assert "1985-03-15" in view
+    assert "Margaret Chen" in view
 
 
 def test_failed_model_call_does_not_commit_extracted_identity(harness, margaret):

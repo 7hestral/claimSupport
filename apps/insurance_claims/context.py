@@ -1,21 +1,14 @@
-"""Bounded dialogue shared by extraction and response context builders."""
+"""Conversation history within the current identity boundary.
 
-import json
+The demo retains the full relevant dialogue so early requests are not silently dropped.
+A production context limit needs explicit summarization before discarding any turns.
+"""
 
 from .schemas.state import Session
 
-HISTORY_CHAR_BUDGET = 24_000
 
-
-def recent_history(session: Session, *, start: int = 0, include_last: bool = False) -> list[dict]:
-    messages = session.messages[start:] if include_last else session.messages[start:-1]
-    history = []
-    size = 2
-    for message in reversed(messages):
-        entry = message.model_dump()
-        cost = len(json.dumps(entry)) + (2 if history else 0)
-        if size + cost > HISTORY_CHAR_BUDGET:
-            break
-        history.append(entry)
-        size += cost
-    return list(reversed(history))
+def conversation_history(session: Session, *, include_last: bool = False) -> list[dict]:
+    messages = session.messages[session.dialogue_start :]
+    if not include_last:
+        messages = messages[:-1]
+    return [message.model_dump() for message in messages]

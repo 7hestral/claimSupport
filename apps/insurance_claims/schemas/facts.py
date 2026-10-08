@@ -16,13 +16,8 @@ MemoryField = Literal[
     "policy_number",
     "caller_role",
     "representative_name",
-    "intent_hint",
-    "case_type",
-    "case_status",
-    "case_month",
-    "case_year",
-    "case_id",
 ]
+CaseHintField = Literal["case_type", "case_status", "case_month", "case_year", "case_id"]
 Topic = Literal[
     "status",
     "denial",
@@ -65,7 +60,11 @@ class CallerFacts(OutputModel):
     policy_number: str | None = None
     caller_role: Literal["policyholder", "representative"] | None = None
     representative_name: str | None = None
-    intent_hint: str | None = None
+
+
+class CaseHints(OutputModel):
+    """Optional caller search clues, never authoritative claim facts."""
+
     case_type: Literal["healthcare", "dental", "auto"] | None = None
     case_status: Literal["denied", "open", "closed"] | None = None
     case_month: int | None = Field(default=None, ge=1, le=12)
@@ -73,17 +72,24 @@ class CallerFacts(OutputModel):
     case_id: str | None = None
 
 
-class ConversationMemory(CallerFacts):
-    summary_preference: Literal["unknown", "send", "skip"] = "unknown"
+class FieldClarification(OutputModel):
+    """An unresolved caller value to clarify, not a verified fact or workflow command."""
+
+    field: IdentityField
+    provided_value: str
+    reason: Literal["ambiguous_date_order", "ambiguous_value"]
 
 
 class Observation(OutputModel):
     """Language understanding only; cannot grant access or advance phases."""
 
     facts: CallerFacts = Field(default_factory=CallerFacts)
+    case_hints: CaseHints = Field(default_factory=CaseHints)
+    clear_case_fields: list[CaseHintField] = Field(default_factory=list)
     clear_fields: list[MemoryField] = Field(default_factory=list)
+    clarifications: list[FieldClarification] = Field(default_factory=list)
+    topics: list[Topic] = Field(default_factory=list)
     scope: Literal["in_scope", "out_of_scope", "mixed"] = "in_scope"
-    topic: Topic = "general"
     refuses_verification: bool = False
     conversation_action: Literal[
         "continue", "ask_followup", "finish_case", "request_human", "end_conversation"

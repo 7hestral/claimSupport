@@ -68,7 +68,6 @@ def test_emotional_process_questions_reach_speaker_without_counting_as_refusal(h
     assert not context["offer_human"]
     assert context["latest_user_message"] == "I'm still confused. Can you explain the options?"
     assert any("I'm anxious" in message["content"] for message in context["history"])
-    assert "Margaret Chen" not in str(context)
     assert not context["evidence"]
 
 
@@ -102,9 +101,8 @@ def test_representative_consent_checks_status_and_expiry(
         assert session.outcome.case_id is None
 
 
-@pytest.mark.parametrize("topic", ["submission_timing", "processing_time"])
-def test_expired_deadline_changes_guidance_without_ending_process(harness, margaret, topic):
-    margaret.topic = topic
+def test_expired_deadline_changes_guidance_without_ending_process(harness, margaret):
+    margaret.topics = ["submission_timing", "processing_time"]
     turn, model, _ = harness(margaret, session=Session(now=datetime(2026, 10, 7, tzinfo=UTC)))
     session = turn()
     assert session.phase == Phase.PROCESS_CASE

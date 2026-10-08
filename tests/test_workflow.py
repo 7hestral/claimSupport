@@ -3,15 +3,15 @@
 import pytest
 
 from apps.insurance_claims.repository import FixtureRepository
-from apps.insurance_claims.schemas.facts import CallerFacts, Observation
-from apps.insurance_claims.schemas.state import Event, Phase
+from apps.insurance_claims.schemas.facts import CallerFacts, CaseHints, Observation
+from apps.insurance_claims.schemas.state import DraftReply, Event, Phase
 
 
 @pytest.mark.parametrize("choice", ["send", "skip"])
 def test_full_conversation_requires_wrapup_and_explicit_email_choice(harness, margaret, choice):
     turn, _, _ = harness(
         margaret,
-        Observation(topic="submission", conversation_action="ask_followup"),
+        Observation(conversation_action="ask_followup", topics=["submission"]),
         Observation(conversation_action="finish_case"),
         Observation(email_choice=choice),
     )
@@ -27,11 +27,11 @@ def test_full_conversation_requires_wrapup_and_explicit_email_choice(harness, ma
     assert "guidance.submission_method" in {e.id for e in session.outcome.discussed}
     session = turn(session)
     assert session.phase == Phase.POST_PROCESS
-    assert session.follow_up.email_choice == "pending"
+    assert session.follow_up.offer_status == "pending"
     assert session.disposition == "active"
     session = turn(session)
     assert session.disposition == "completed"
-    assert session.follow_up.email_choice == choice
+    assert session.follow_up.choice == choice
     assert session.follow_up.delivery == ("simulated_only" if choice == "send" else "not_requested")
     assert "pathology report" in session.follow_up.email_draft
     assert "4472" not in session.follow_up.email_draft
@@ -58,8 +58,16 @@ def test_early_case_hint_survives_partial_identity_without_claim_access(harness,
         FixtureRepository().claims_for(session)
     session = turn(session)
     assert session.selected_case_id == "CL-2048"
-    assert session.memory.case_month == 1
-    assert session.memory.case_year is None
+    assert session.case_hints.case_month == 1
+    assert session.case_hints.case_year is None
+
+
+def test_identified_claim_does_not_require_an_extracted_intent_string(harness, margaret):
+    margaret.conversation_action = "continue"
+    turn, _, _ = harness(margaret)
+    session = turn()
+    assert session.selected_case_id == "CL-2048"
+    assert session.phase == Phase.PROCESS_CASE
 
 
 @pytest.mark.parametrize(
@@ -105,7 +113,7 @@ def test_identity_gate_rejects_incomplete_or_conflicting_data(harness, margaret,
 
 
 def test_foreign_case_id_never_retrieves_another_customers_claim(harness, margaret):
-    margaret.facts.case_id = "CL-3001"
+    margaret.case_hints.case_id = "CL-3001"
     turn, model, _ = harness(margaret)
     session = turn()
     assert session.verification.verified_party_id == "P9"
@@ -117,8 +125,8 @@ def test_foreign_case_id_never_retrieves_another_customers_claim(harness, margar
 
 
 def test_ambiguous_january_claim_requires_clarification(harness, margaret):
-    margaret.facts.case_status = None
-    turn, model, _ = harness(margaret, Observation(facts=CallerFacts(case_id="CL-2048")))
+    margaret.case_hints.case_status = None
+    turn, model, _ = harness(margaret, Observation(case_hints=CaseHints(case_id="CL-2048")))
     session = turn()
     assert session.phase == Phase.RESOLVE_INTENT
     assert {c["case_id"] for c in model.contexts[-1]["candidates"]} == {"CL-2048", "CL-2011"}
@@ -127,48 +135,111 @@ def test_ambiguous_january_claim_requires_clarification(harness, margaret):
 
 
 def test_identity_correction_revokes_access_and_clears_outcome(harness, margaret):
-    turn, model, _ = harness(margaret, Observation(facts=CallerFacts(full_name="Ma Tian")))
-    session = turn()
+    auto = margaret.model_copy(deep=True)
+    auto.case_hints = CaseHints(case_type="auto")
+    turn, model, _ = harness(auto, margaret, Observation(facts=CallerFacts(full_name="Ma Tian")))
+    session = turn(turn())
+    assert "CL-2102" in session.prior_outcomes
     session.messages[-1].content = "The pathology report is missing from CL-2048."
     session = turn(session, Event(text="Actually, my name is Ma Tian."))
     assert session.phase == Phase.VERIFY_ID
     assert session.verification.verified_party_id is None
     assert session.selected_case_id is None
     assert session.outcome.case_id is None
+    assert session.prior_outcomes == {}
     assert model.contexts[-1]["evidence"] == []
     assert model.contexts[-1]["outcome"]["discussed"] == []
     assert model.contexts[-1]["history"] == []
     assert "pathology" not in str(model.contexts[-1])
-    assert model.contexts[-1]["latest_user_message"] == "Actually, my name is [provided]."
+    assert "CL-2102" not in str(model.contexts[-1])
+    assert model.contexts[-1]["latest_user_message"] == "Actually, my name is Ma Tian."
+
+
+def test_ambiguous_correction_reaches_speaker_and_does_not_linger(harness, margaret):
+    clarification = {
+        "field": "dob",
+        "provided_value": "04/03/1985",
+        "reason": "ambiguous_date_order",
+    }
+    correction = Observation.model_validate(
+        {"clear_fields": ["dob"], "clarifications": [clarification]}
+    )
+    turn, model, _ = harness(margaret, correction, Observation(facts=CallerFacts(dob="1985-03-15")))
+    session = turn()
+    session = turn(session, Event(text="Correction: my DOB is 04/03/1985."))
+    assert session.memory.dob is None
+    assert session.verification.verified_party_id is None
+    assert model.contexts[-1]["evidence"] == []
+    assert model.contexts[-1]["clarifications"] == [clarification]
+
+    session = turn(session, Event(text="My correct DOB is March 15, 1985."))
+    assert session.verification.verified_party_id == "P9"
+    assert model.contexts[-1]["clarifications"] == []
+    assert model.contexts[-1]["latest_user_message"] == "My correct DOB is March 15, 1985."
+    assert model.contexts[-1]["history"][0]["content"] == "Correction: my DOB is 04/03/1985."
 
 
 def test_followup_does_not_close_case_or_accept_email_prematurely(harness, margaret):
     turn, _, _ = harness(
         margaret,
-        Observation(conversation_action="ask_followup", topic="format", email_choice="send"),
+        Observation(conversation_action="ask_followup", email_choice="send"),
         Observation(conversation_action="finish_case"),
-        Observation(conversation_action="ask_followup", topic="receipt", email_choice="send"),
+        Observation(conversation_action="ask_followup", email_choice="send"),
     )
     session = turn(turn())
     assert session.phase == Phase.PROCESS_CASE
-    assert session.follow_up.email_choice == "not_asked"
+    assert session.follow_up.offer_status == "not_offered"
     session = turn(session)
     assert session.phase == Phase.POST_PROCESS
     session = turn(session)
     assert session.disposition == "active"
-    assert session.follow_up.email_choice == "pending"
+    assert session.follow_up.offer_status == "pending"
 
 
 def test_early_email_preference_is_remembered_but_requires_later_confirmation(harness, margaret):
     margaret.email_choice = "send"
     turn, _, _ = harness(margaret, Observation(conversation_action="finish_case"))
     session = turn()
-    assert session.memory.summary_preference == "send"
-    assert session.follow_up.email_choice == "not_asked"
+    assert session.follow_up.choice == "send"
+    assert session.follow_up.offer_status == "not_offered"
     session = turn(session)
-    assert session.memory.summary_preference == "send"
-    assert session.follow_up.email_choice == "pending"
+    assert session.follow_up.choice == "send"
+    assert session.follow_up.offer_status == "pending"
     assert session.disposition == "active"
+
+
+def test_same_claim_hint_refinement_preserves_unresolved_need(harness, margaret):
+    turn, model, _ = harness(margaret, Observation(case_hints=CaseHints(case_id="CL-2048")))
+    question = "Who can explain the approval notice I received?"
+    model.respond = lambda context, **kwargs: DraftReply(
+        reply="That notice is not in the available record.", unanswered_question=question
+    )
+    session = turn()
+    model.respond = lambda context, **kwargs: DraftReply(
+        reply="The current record still shows this claim denied.",
+        discussed_evidence_ids=["claim.status"],
+    )
+    session = turn(session)
+    assert session.verification.verified_party_id == "P9"
+    assert session.selected_case_id == "CL-2048"
+    assert session.outcome.unresolved_questions == [question]
+
+
+def test_identity_formatting_preserves_representative_consent(harness, margaret):
+    margaret.facts.caller_role = "representative"
+    margaret.facts.representative_name = "David Chen"
+    margaret.facts.phone = "650-521-2836"
+    turn, _, _ = harness(
+        margaret,
+        Observation(facts=CallerFacts(full_name="margaret   chen", phone="+1 (650) 521-2836")),
+    )
+    session = turn()
+    session = turn(session, Event(kind="advance_time", seconds=10))
+    assert session.authorization.status == "approved"
+    session = turn(session)
+    assert session.authorization.status == "approved"
+    assert session.verification.verified_party_id == "P9"
+    assert session.selected_case_id == "CL-2048"
 
 
 @pytest.mark.parametrize(
@@ -181,18 +252,37 @@ def test_early_email_preference_is_remembered_but_requires_later_confirmation(ha
 def test_switching_cases_reuses_identity_and_replaces_case_outcome(
     harness, margaret, case_type, case_id, status
 ):
+    margaret.topics = ["format"]
     turn, _, _ = harness(
         margaret,
         Observation(
             new_case=True,
-            topic="payment",
             conversation_action="ask_followup",
-            facts=CallerFacts(case_type=case_type, intent_hint="Explain payment"),
+            case_hints=CaseHints(case_type=case_type),
+            topics=["payment", "payment"],
         ),
     )
     session = turn(turn())
     assert session.verification.verified_party_id == "P9"
     assert session.selected_case_id == case_id
     assert session.outcome.claim_status == status
+    assert session.outcome.topics == ["payment"]
+    assert session.prior_outcomes["CL-2048"].topics == ["format"]
     assert all(entry.id != "claim.denial" for entry in session.outcome.discussed)
     assert any(entry.id == "claim.net_pay" for entry in session.outcome.discussed)
+
+
+def test_summary_retains_both_discussed_claims_without_mixing_them(harness, margaret):
+    margaret.case_hints = CaseHints(case_type="auto")
+    turn, _, _ = harness(
+        margaret,
+        Observation(new_case=True, case_hints=CaseHints(case_type="dental")),
+        Observation(conversation_action="finish_case"),
+        Observation(email_choice="send"),
+    )
+    session = turn(turn(turn(turn())))
+    summary = session.follow_up.email_draft
+    assert "CL-2102" in summary and "CL-1899" in summary
+    auto, dental = summary.split("Claim CL-1899", 1)
+    assert "3200.00" in auto and "425.00" not in auto
+    assert "425.00" in dental and "3200.00" not in dental

@@ -117,14 +117,15 @@ def outcome_view(session: Session) -> None:
         st.info(f"Human support requested: {outcome.handoff_reason} No actual transfer was made.")
     if session.follow_up.email_draft:
         with st.expander("Email summary draft", expanded=session.disposition == "completed"):
-            st.caption(
-                f"Choice: {session.follow_up.email_choice}. Delivery is simulated; no email sent."
-            )
+            st.caption(f"Choice: {session.follow_up.choice}. Delivery is simulated; no email sent.")
             st.text(session.follow_up.email_draft)
     if session.disposition != "active":
         export = {
             "outcome": outcome.model_dump(),
-            "email_choice": session.follow_up.email_choice,
+            "prior_outcomes": {
+                key: value.model_dump() for key, value in session.prior_outcomes.items()
+            },
+            "email_choice": session.follow_up.choice,
             "delivery": session.follow_up.delivery,
             "disposition": session.disposition,
         }
@@ -154,6 +155,10 @@ def main() -> None:
         for message in session.messages:
             with st.chat_message(message.role):
                 st.write(message.content)
+        st.caption(
+            "For date of birth, we recommend YYYY-MM-DD (year-month-day), for example 1990-12-31, "
+            "to avoid day/month confusion."
+        )
         text = st.chat_input(
             "Message claims support", disabled=session.disposition != "active", max_chars=12000
         )
@@ -170,7 +175,7 @@ def main() -> None:
         with state_tab:
             st.subheader("Workflow state")
             st.badge(session.phase.value, color="blue")
-            st.caption("Identity values are masked. This panel is for the demo tester.")
+            st.caption("Caller values and workflow state for the demo tester.")
             st.json(inspector(session), expanded=2)
         with debug_tab:
             debug_console(st.session_state.get("llm_traces", {}))

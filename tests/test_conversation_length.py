@@ -1,4 +1,4 @@
-"""Long chats retain workflow state while limiting model history."""
+"""Long chats retain earlier requests and the identity access boundary."""
 
 import json
 
@@ -9,7 +9,7 @@ from apps.insurance_claims.schemas.facts import Observation
 from apps.insurance_claims.schemas.state import Message, Phase, Session
 
 
-def test_long_chat_windows_model_input_without_losing_memory(margaret):
+def test_long_chat_retains_early_requests_without_silently_truncating(harness, margaret):
     class RecordingModel:
         model_name = "test-model"
 
@@ -22,8 +22,14 @@ def test_long_chat_windows_model_input_without_losing_memory(margaret):
 
     model = RecordingModel()
     session = Session()
-    session.memory = session.memory.model_copy(update=margaret.facts.model_dump())
-    session.messages = [Message(role="user", content="Old hint: January healthcare denial.")]
+    session.memory = margaret.facts
+    session.case_hints = margaret.case_hints
+    session.messages = [
+        Message(
+            role="user",
+            content="For my January healthcare denial, can I scan the report and how long is review?",
+        )
+    ]
     for _ in range(40):
         session.messages.extend(
             [
@@ -42,22 +48,28 @@ def test_long_chat_windows_model_input_without_losing_memory(margaret):
     OpenRouterReasoner(model).interpret(session)
 
     context = model.context
-    assert context["history_truncated"]
-    assert len(json.dumps(context["history"])) <= 24_000
+    assert len(context["history"]) == len(session.messages) - 1
     assert context["latest_user_message"] == "Email, please."
     assert context["history"][-1]["content"].startswith("Would you prefer")
-    assert "Old hint:" not in json.dumps(context["history"])
-    assert context["memory"]["case_month"] == 1
-    assert context["memory"]["case_type"] == "healthcare"
-    assert context["memory"]["case_status"] == "denied"
+    assert "can I scan the report and how long is review?" in context["history"][0]["content"]
+    assert context["case_hints"]["case_month"] == 1
+    assert context["case_hints"]["case_type"] == "healthcare"
+    assert context["case_hints"]["case_status"] == "denied"
     assert context["memory"]["full_name"] == "Margaret Chen"
     assert session.model_dump_json() == transcript
+
+    turn, speaker, _ = harness(margaret, session=session)
+    turn()
+    assert (
+        "can I scan the report and how long is review?"
+        in speaker.contexts[-1]["history"][0]["content"]
+    )
 
 
 def test_many_followups_do_not_force_completion(harness, margaret):
     turn, _, _ = harness(
         margaret,
-        *[Observation(topic="format", conversation_action="ask_followup") for _ in range(60)],
+        *[Observation(conversation_action="ask_followup") for _ in range(60)],
         Observation(conversation_action="finish_case"),
         Observation(email_choice="skip"),
     )

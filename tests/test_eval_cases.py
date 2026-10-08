@@ -67,8 +67,8 @@ def test_report_saves_summary_and_before_state_even_when_an_expectation_fails(ha
     assert turns[0]["before"]["verification"]["verified_party_id"] is None
     assert turns[0]["plan"]["evidence"]
     assert turns[0]["draft"]["discussed_evidence_ids"]
-    assert turns[-1]["before"]["follow_up"]["email_choice"] == "pending"
-    assert turns[-1]["session"]["follow_up"]["email_choice"] == "send"
+    assert turns[-1]["before"]["follow_up"]["offer_status"] == "pending"
+    assert turns[-1]["session"]["follow_up"]["choice"] == "send"
     assert turns[-1]["session"]["follow_up"]["email_draft"]
     assert turns[-1]["session"]["outcome"]["next_steps"]
     assert session.messages == []

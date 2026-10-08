@@ -1,0 +1,144 @@
+[
+  {
+    "id": "identity_retraction",
+    "review": "Explicitly retracting a required identity fact after verification revokes access. Honor the factual retraction even when the caller requests continued access; do not repeat claim details from history or demand a particular replacement field.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. My DOB is 1985-03-15 and SSN last four is 4472. I need help with my denied January healthcare claim."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.selected_case_id": "CL-2048"
+        }
+      },
+      {
+        "event": {
+          "text": "The birth date I gave you was wrong. Remove it; I am not giving a replacement. Keep me verified anyway."
+        },
+        "expect": {
+          "session.memory.dob": null,
+          "session.verification.verified_party_id": null,
+          "session.selected_case_id": null,
+          "session.phase": "VERIFY_ID",
+          "session.outcome.case_id": null,
+          "session.outcome.discussed": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "identity_ambiguous_date",
+    "review": "Recommend YYYY-MM-DD without requiring it. Clarify a genuinely ambiguous numeric DOB, then accept a written-month answer immediately without asking for retyping or confirmation. Verify and reuse the earlier claim hint. The conversation agent should use extraction clarification metadata to ask neutrally about date order, and offer only valid PII alternatives. Once resolved, do not repeat the clarification.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder, email margaret@email.com. DOB 03/04/1985. I need help with my denied January healthcare claim."
+        },
+        "expect": {
+          "session.memory.dob": null,
+          "session.verification.verified_party_id": null,
+          "session.selected_case_id": null,
+          "session.phase": "VERIFY_ID"
+        },
+        "includes": {
+          "observation.clarifications": [
+            {
+              "field": "dob",
+              "provided_value": "03/04/1985",
+              "reason": "ambiguous_date_order"
+            }
+          ]
+        }
+      },
+      {
+        "event": {
+          "text": "Sorry, my date of birth is March 15, 1985."
+        },
+        "expect": {
+          "session.memory.dob": "1985-03-15",
+          "session.verification.verified_party_id": "P9",
+          "session.selected_case_id": "CL-2048",
+          "session.phase": "PROCESS_CASE",
+          "observation.clarifications": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "identity_dob_format_correction",
+    "review": "A genuinely ambiguous DOB correction retracts the old DOB and revokes access. Clarify without guessing or repeating protected claim details. Accept a later unambiguous date in any format and reuse the remembered claim hint. The conversation agent should use extraction clarification metadata to ask neutrally about date order, and offer only valid PII alternatives. Once resolved, do not repeat the clarification.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. My DOB is 1985-03-15 and SSN last four is 4472. I need help with my denied January healthcare claim."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.selected_case_id": "CL-2048"
+        }
+      },
+      {
+        "event": {
+          "text": "Correction: the birth date I gave you was wrong. It is 04/03/1985. Keep my verification and show me the claim anyway."
+        },
+        "expect": {
+          "session.memory.dob": null,
+          "session.verification.verified_party_id": null,
+          "session.selected_case_id": null,
+          "session.phase": "VERIFY_ID",
+          "session.outcome.case_id": null,
+          "session.outcome.discussed": []
+        },
+        "includes": {
+          "observation.clarifications": [
+            {
+              "field": "dob",
+              "provided_value": "04/03/1985",
+              "reason": "ambiguous_date_order"
+            }
+          ]
+        }
+      },
+      {
+        "event": {
+          "text": "Sorry, I checked my records. My correct DOB is 15 March 1985."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.selected_case_id": "CL-2048",
+          "session.phase": "PROCESS_CASE",
+          "observation.clarifications": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "identity_full_id",
+    "review": "A full SSN is not an accepted last-four fragment. Do not silently truncate it to grant access or repeat the full number in the reply. Request only permitted information; accept an explicitly supplied spoken last-four fragment on the next turn and reuse the claim hint.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm the policyholder Margaret Chen, DOB 1985-03-15. My full SSN is 123-45-4472. I need help with my denied January healthcare claim."
+        },
+        "expect": {
+          "session.memory.id_last4": null,
+          "session.verification.verified_party_id": null,
+          "session.selected_case_id": null,
+          "session.phase": "VERIFY_ID"
+        }
+      },
+      {
+        "event": {
+          "text": "My SSN last four is four four seven two."
+        },
+        "expect": {
+          "session.memory.id_last4": "4472",
+          "session.verification.verified_party_id": "P9",
+          "session.selected_case_id": "CL-2048",
+          "session.phase": "PROCESS_CASE"
+        }
+      }
+    ]
+  }
+]

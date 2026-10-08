@@ -20,7 +20,7 @@ the default is `anthropic/claude-sonnet-4.6`. Environment variables override `.e
 uv run streamlit run app.py --server.address 127.0.0.1 --browser.gatherUsageStats false
 ```
 
-Open [the local demo](http://127.0.0.1:8501). The left panel is chat; the right panel shows masked
+Open [the local demo](http://127.0.0.1:8501). The left panel is chat; the right panel shows caller
 memory, phase history, verification, consent status, and follow-up choices. The outcome develops
 below the chat and can be downloaded when the conversation ends.
 
@@ -41,6 +41,10 @@ The application verifies three matching PII fields, resolves CL-2048 from the ea
 explains the missing pathology report and office note. Follow up with "Can I send a scan?", then
 "That answers my question, that's all." Choose send or skip when offered the summary. Send records
 the choice and prepares a draft; the application explicitly states that nothing was sent.
+
+For date of birth, we recommend `YYYY-MM-DD` (year-month-day), for example `1985-03-15`. The chat
+displays this reminder. Other unambiguous formats are accepted without retyping; the agent requests
+clarification only when the date has multiple plausible meanings, and permits alternate ID fields.
 
 Other scenarios:
 
@@ -67,15 +71,23 @@ before polling, so advancing directly to expiry cannot grant late approval.
 - The representative fixture plus simulated policyholder consent supplies the demo authorization
   scenario. It is not a real representative-authentication service.
 - Claim retrieval checks verified customer ownership. Corrections to identity revoke access and
-  clear the selected case and outcome. Claim records are never given to the extraction model.
-- The shared response model gets phase instructions, masked memory, an application-selected action,
-  and authorized evidence. It cannot set the phase, authorize access, or mutate claim records.
+  clear the selected case and all current/prior outcomes. Claim records are never given to the extraction model.
+- The shared response model knows all four stages and gets the current phase, caller dialogue,
+  optional extraction clarifications, an application-selected action, and topic-selected authorized
+  evidence. It cannot set the phase, authorize access, or mutate claim records.
+  Caller values appear directly in model context and the inspector; there is no `[provided]` masking.
+- The extractor can select multiple guidance topics per turn. Code appends and deduplicates pending
+  topics until a claim reply, preserving early questions through verification and consent. Each
+  claim retains its handled topic history for continuity; retrieval uses pending requests rather
+  than reloading all past topics. Explicit switches start a fresh pending list.
 - Three distinct failed verification submissions offer human support. Clarifications do not count.
   Two refusal turns without identity progress offer human support. Emotion alone does not count.
   Explicit handoff requests exit.
 - A filled outcome does not end processing. The caller must indicate readiness to wrap up without a
-  new question. Email choice is accepted only after the summary offer; silence is not consent.
+  new question. An early email choice is remembered in `follow_up.choice`; closing confirmation is tracked
+  separately and occurs only after the summary offer. Silence is not consent.
 - Outcomes retain fixture-backed facts and suggested steps separately from unchanged claim status.
+  A conversation summary includes all discussed claims with separate attribution.
   Document IDs are normalized across fixtures. Expired deadlines override generic submission timing.
 
 Structured output validates shape and evidence references; it does not prove every generated sentence
@@ -100,13 +112,14 @@ apps/insurance_claims/
   llm_calls.py                  streaming, output validation, token usage, and call events
   monitoring.py                 Langfuse turn, generation, and decision observations
   trace_privacy.py              fixture identity masking at telemetry export
-  context.py                    bounded dialogue windows
+  context.py                    dialogue within the current identity boundary
   debug_ui.py                   local model traces and token totals
   model.py                     OpenRouter configuration
   ui.py                        chat and demo controls
   fixtures/                    sample customers, claims, and guidance
 ```
 
+The preserved [original assignment](docs/assignment/original.txt) is the acceptance reference.
 See [workflow design](docs/code/workflow.md) for state ownership and extension boundaries.
 
 ## Checks
@@ -136,9 +149,12 @@ Use the repository's [SOP review skill](.agents/skills/sop-eval-review/SKILL.md)
 [behavioral rubric](test_cases/rubric.md) to grade those artifacts. Deterministic checks enforce
 business gates and field population; text review judges meaning without exact-wording snapshots.
 
-There is no turn-count limit. Model history uses a sliding window of up to 24,000 JSON characters;
-the latest message and structured caller memory are always included. The full transcript remains
-visible in the UI. A completed, ended, or handed-off conversation requires starting a new one.
+There is no turn-count limit. Models receive the full dialogue within the current identity boundary,
+so early questions are not silently lost. Structured identity and optional case hints are separate;
+there is no extracted topic or prose intent label. A verified identity change excludes previous
+protected dialogue. This demo does not summarize overlong conversations: model context limits still
+apply, and production use would need explicit summarization before dropping old turns. The full
+transcript remains visible in the UI. A completed, ended, or handed-off conversation requires starting a new one.
 
 The **LLM debug** tab shows input/output token totals separately for extraction and response. Each
 call exposes its prompts, output schema, raw output, parsed result, latency, and provider token

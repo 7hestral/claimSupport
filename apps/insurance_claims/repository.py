@@ -23,6 +23,9 @@ class FixtureRepository:
             (directory / "claims.json").read_text()
         )
         self.guidelines = json.loads((directory / "required_document_guideline.json").read_text())
+        self.followup_guidance = {
+            rule["topic"]: rule["en"] for rule in self.guidelines["claim_followup_guidance"]
+        }
         self.field_descriptions = json.loads((directory / "claim_schema.json").read_text())[
             "field_descriptions"
         ]

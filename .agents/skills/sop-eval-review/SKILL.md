@@ -5,8 +5,20 @@ description: Review this repository's insurance SOP conversation outputs against
 
 # SOP conversation review
 
-Read [the rubric](../../../test_cases/rubric.md) and the relevant scenario `review` descriptions.
+Read [the original assignment](../../../docs/assignment/original.txt) first, then
+[the rubric](../../../test_cases/rubric.md) and the relevant scenario `review` descriptions.
+The assignment defines acceptance; the rubric interprets it and case notes exercise it.
+Distinguish assignment requirements from documented demo choices (simulated delivery, consent,
+attempt limits). Do not require our extractor fields, topic taxonomy, exact action labels, or a
+particular dialogue structure as evidence of successful understanding. Consult the source fixtures
+for substantive claims and guidance, not generated answers or earlier review conclusions.
 Use [the case guide](../../../test_cases/README.md) for runner commands and fixture coverage.
+
+This skill guides the invoking agent; it does not automatically spawn a reviewer. If a separate
+reviewer is authorized, give it the assignment, this skill, rubric, case definitions, fixtures,
+and exact run artifact. Have it read those sources and judge every turn independently of the
+implementer's conclusions. Record whether the review was by the implementing agent or an
+independent agent; do not present self-review as independent validation.
 
 ## Evidence
 
@@ -32,6 +44,22 @@ those facts at that turn. Read fixture rules if needed to investigate missing or
 
 - Check all turns in each selected case, including the final summary. A stopped/error case is
   incomplete, even if its earlier turns passed. Report deterministic failures separately.
+- Check compound and earlier unanswered requests against the transcript. Correct field extraction
+  alone does not prove memory: after verification the reply must use the early request without
+  restarting intake. Optional case hints must not become mandatory identity fields. A caller's
+  belief about a selected claim does not change the authoritative record or itself require a switch.
+- Review guidance selection as well as the reply: every part of a compound/early request should have
+  its applicable evidence after authorization, including acceptance qualifications. A later focused
+  question should not reload unrelated guidance just because those topics were discussed before.
+  Topic names alone are not proof of recall or a good answer; summaries should still retain the
+  earlier discussion even when current evidence is narrower.
+- The agent should know the four-stage journey and explain the optional closing summary when
+  relevant, without reciting internal phase names or promising real delivery in this demo.
+  Remember early email choices, allow changes, and do not equate a remembered preference with
+  completed delivery. Questions accompanying a choice must be answered before closing.
+- For multi-claim conversations, inspect the actual email draft across current and prior outcomes.
+  Major discussion for each authorized claim belongs in the conversation summary, with separate
+  attribution. A different customer's outcomes must be removed when verified identity changes.
 - Grade each applicable rubric dimension as `pass`, `concern`, `fail`, `not_observed`, or
   `not_applicable`. Explain concerns/failures with case ID, turn, a short quote, and the conflicting
   evidence or state. Do not assign a numeric score that can average away a gate violation.

@@ -4,6 +4,11 @@ Deterministic code checks workflow state and populated structured fields. A Code
 natural-language replies and summary drafts with the [rubric](rubric.md) using the repository's
 [sop-eval-review skill](../.agents/skills/sop-eval-review/SKILL.md). A state pass is not a text pass.
 
+Read the preserved [original assignment](../docs/assignment/original.txt) before reviewing. The
+review skill is an instruction for the invoking Codex agent, not an automatic subagent launcher.
+A separately authorized reviewer should receive that assignment, the rubric, fixtures, cases, and
+the exact run artifact. Review reports identify self-review versus independent review.
+
 ## Run and review
 
 ```shell
@@ -42,12 +47,16 @@ whether the agent merely acknowledges a caller's statement or asserts an actual 
 
 | Cases | Distinct behavior exercised |
 | --- | --- |
+| `compound_followup`, `early_requests` | Multiple current/early questions, full dialogue memory across verification, and reassurance about the optional closing summary |
+| `optional_claim_hints`, `claim_discrepancy` | Claim fields are optional hints, record facts are authoritative, same-claim corrections and explicit switches preserve identity |
+| `early_email_change` | One early email preference survives verification and can change at the closing offer |
 | `upfront`, `recovery` | Three-field identity, original sample, partial answers, remembered January hint, optional email send/skip |
 | `identity_correction`, `identity_revocation` | Policy number excluded from PII count, contradictory field, correction, revoked access and injection attempt |
+| `identity_retraction`, `identity_ambiguous_date`, `identity_dob_format_correction`, `identity_full_id` | Retracted PII revokes access; only ambiguous DOBs need clarification; an ambiguous DOB correction revokes prior access; a full ID is not silently truncated; clarification resumes the remembered case |
 | `alias_no_claims`, `no_claims` | Name/email aliases, formatted phone, verification without SSN/DOB, two accounts with no claims, human request |
 | `ambiguous_january` | Competing January claims, year clarification, CL-2011 settled payment and summary |
 | `national_id_claim` | Ma Tian national ID, CL-3001, diagnosis report and absent document-specific details |
-| `payment_switch` | Open auto versus settled dental amounts; case switch and replacement summary |
+| `payment_switch` | Open auto versus settled dental amounts; case switch with separate active outcomes and a complete multi-claim conversation summary |
 | `unknown_answer` | Unavailable adjuster/callback information, recorded uncertainty and summary fidelity |
 | `document_alternatives` | Replacement/substitute records, exhausted alternatives, empathy and human review |
 | `timing_before_deadline`, `expired_deadline` | Submission date versus processing estimate, deadline clamping, expiry and human review |
@@ -70,8 +79,11 @@ construction offline.
 
 Some fixture data is intentionally not operative: representative relationship/buyer-name metadata,
 claim-schema type/example/notes, and guidance matching hints are not consumed by runtime routing.
-The model classifies topics; application code bounds submission timing; the generic fixture fallback
-is unused. Do not wire these into the product merely to make a coverage count look complete.
+The extractor selects multiple bounded guidance subjects. Code retrieves their applicable union,
+bounds submission timing, and preserves document-specific qualifications. Fixture topic labels index
+follow-up rules; their wording need not match the extractor labels. Overlapping generic wrappers
+and the generic fixture fallback are unused when more specific guidance already covers the subject.
+Do not wire unused metadata into the product merely to make a coverage count look complete.
 
 The auto claim has no requested documents. Auto-document rules therefore remain unreachable with
 this sample data; testing them end-to-end would require a separate realistic claim fixture. Existing
@@ -81,3 +93,11 @@ canonical number, so it cannot independently demonstrate alias matching.
 See [historical evaluations](history.md) for earlier observations. Those runs used the earlier suite;
 new cases need their own live results and semantic review. Neither one run per case nor the limited
 paraphrases establish statistical reliability or exhaustive injection coverage.
+
+## Assignment-aligned refactor
+
+Assertions on the old `intent_hint` field were removed: remembering a need is graded from the actual
+reply and transcript. Case-hint checks now use `session.case_hints`, distinct from database records.
+Email checks distinguish `follow_up.choice` from `offer_status` and actual delivery. A new question
+can retain a send preference while the closing offer remains pending. No assertion requires an
+exact reply, one topic per turn, or the caller to provide every claim selector.

@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessageChunk
 
 from apps.insurance_claims.monitoring import monitoring_client
 from apps.insurance_claims.repository import FixtureRepository
-from apps.insurance_claims.schemas.facts import CallerFacts, Observation
+from apps.insurance_claims.schemas.facts import CallerFacts, CaseHints, Observation
 from apps.insurance_claims.schemas.state import DraftReply, Event, Session
 from apps.insurance_claims.workflow import build_workflow
 
@@ -52,13 +52,14 @@ def margaret():
             id_type="ssn_last4",
             caller_role="policyholder",
             policy_number="POL-9921",
-            intent_hint="Explain my denial",
+        ),
+        case_hints=CaseHints(
             case_type="healthcare",
             case_status="denied",
             case_month=1,
         ),
-        topic="denial",
         conversation_action="ask_followup",
+        topics=["denial"],
     )
 
 

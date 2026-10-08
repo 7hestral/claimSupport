@@ -2,6 +2,140 @@
 
 Results are tied to the runs described below. Earlier runs do not validate later cases or revisions.
 
+## Multi-topic evidence routing
+
+The extractor now selects multiple bounded guidance topics. Pending requests append and deduplicate
+through verification/consent/case selection; after a successful claim reply they join that claim's
+topic history. Retrieval uses pending requests rather than all prior subjects. Explicit switches
+clear pending topics and keep each prior claim's discussion in its own outcome for the summary.
+
+87 offline tests passed, including early-topic preservation, deduplication, receipt-only retrieval,
+case-switch history, deadline suppression, and the next-step reference boundary. Lint, formatting,
+diff checks, and skill validation passed. The first full live run exposed three reference-validation
+failures: actionable service guidance was excluded from the next-step schema, and a general claim
+overview lacked its ordinary request-documents step. The contract was corrected to allow authorized
+guidance as a source for next steps while still rejecting claim facts and unknown IDs.
+
+The final full run passed state checks for all 31 cases / 95 events with
+`anthropic/claude-sonnet-4.6`. The receipt question now has 6 evidence entries instead of 24; the
+compound scan/submission/review request has 12, alternatives plus receipt has 15, and early scan/review
+questions have 10. Their answers retained the relevant guidance and conditions. The receipt reply no
+longer claims instant confirmation does not exist, and all eight summary drafts retain their discussed
+claims despite narrower current evidence.
+
+Semantic acceptance is still incomplete: one reply calls March 18 seven days after March 15, despite
+the correct date in evidence. Other concerns include unsupported human-follow-up capabilities and
+an inaccurate explanation of identity revocation. These are recorded separately from the passing
+routing and state checks. The implementing-agent review, per-case verdicts, source manifests, raw
+first/final runs, and trace links are in `outputs/multi-topic-routing/`. No independent review or
+statistical recall/reliability measurement was performed.
+
+## Optional clarification metadata and visible caller values — October 7, 2026
+
+Added optional per-turn extraction clarifications (default `[]`) so the conversation agent receives
+the ambiguous field, caller value, and reason. Two existing DOB cases now check that metadata and
+its absence after a clear answer. Removed `[provided]` masking from response context and the demo
+inspector; identity access boundaries and separate telemetry export pseudonymization remain.
+
+84 offline tests passed, as did lint/format/diff checks. A targeted live run of five cases / 13 events
+with `anthropic/claude-sonnet-4.6` passed all state checks. Both ambiguous-date replies presented both
+interpretations and accepted later written-month answers; the correction reply offered valid PII
+alternatives. Semantic review still found a wrong-year typo (`2985`) in one clarification example,
+an omitted original-document qualification in a claim answer, and other grounding concerns.
+This is not full semantic acceptance or a full-suite rerun. The implementing-agent review and
+trace links are in `outputs/clarification-metadata/review.md`, with raw `live.json` and source hashes.
+
+## Assignment-aligned workflow and review — October 7, 2026
+
+Preserved the original assignment in `docs/assignment/original.txt` and updated cases before changing
+the implementation. Five new scenarios exercise compound questions, early requests, optional claim
+hints, discrepancies with recorded claim facts, and changed email preferences. The suite now has
+31 scenarios / 95 events. Semantic review starts from the original assignment and authorized
+fixtures; it accepts equivalent wording and does not require the removed topic/intent fields.
+The review skill guides the invoking agent and does not automatically launch a subagent.
+
+The implementation separates identity from optional claim hints, uses conversation history for
+requests, supplies applicable grounded guidance without a single-topic classifier, and stores one
+email choice separately from offer/delivery progress. Conversation summaries now include separately
+attributed outcomes for all discussed claims. Identity changes clear protected history and outcomes;
+claim-hint changes do not themselves require identity verification again.
+
+Offline validation passed: 83 tests, lint, formatting, and skill validation. A full live run of all
+31 scenarios / 95 events and a final targeted rerun of 12 scenarios / 43 events passed state checks
+with `anthropic/claude-sonnet-4.6`. The final small prompt/date-evidence revision was tested only in
+that targeted rerun. Source manifests accompany the artifacts.
+
+**Semantic acceptance remains incomplete.** The implementing Codex agent reviewed the transcripts,
+not an independent reviewer. One reply guessed an ambiguous DOB and offered policy number as a
+PII alternative, although extraction and the access gate correctly rejected the ambiguous date.
+Another claimed instant upload confirmation does not exist when the fixture only leaves it
+unspecified. Additional grounding and consent-wording concerns remain in the report. Langfuse
+traces distinguish these response-model failures from correct workflow state; they do not establish
+a single causal explanation or reliability rate.
+
+Evidence: `outputs/assignment-refactor/review.md`, `final-*.json`, `recheck-*.json`, and their source
+manifests (ignored by Git). The report identifies each case, dimension, finding, and relevant trace.
+
+## DOB clarification only for genuine ambiguity
+
+The user clarified that YYYY-MM-DD is a recommendation, not a mandatory input format. The current
+prompts accept written months, explicitly stated numeric orders, and dates with a single valid
+interpretation without retyping or confirmation. Clarification is reserved for multiple plausible
+dates. The UI note and README now describe the format as recommended. An ambiguous correction
+still retracts a previous DOB and revokes access until clarified.
+
+The first revised prompt still guessed some slash dates. A focused revision distinguishes an
+explicitly stated order from a merely familiar-looking date. All 27 rechecked probes passed,
+including written months, both explicit numeric orders, year-first slashes, equal month/day values,
+and genuinely ambiguous inputs. Earlier strict-format results below are historical and do not
+define the current acceptance contract. Current artifacts are in
+`outputs/extractor-tuning/flexible-dob-review.md` and its linked raw reports.
+
+## User-facing DOB format convention
+
+The user chose a format request and visible reminder instead of deterministic date parsing.
+The extractor now accepts DOB supplied as `YYYY-MM-DD`; other representations are left unset for
+the caller to restate. An explicit correction in another format also retracts the old DOB so prior
+access cannot silently survive. The verification prompt requests typed input, offers alternate
+fields, and avoids converting a date then asking for yes/no confirmation. The UI note explains
+year-month-day with an example. No schema or workflow architecture changed.
+
+Under this input convention, all date probes passed in a 53-probe run. Two pre-existing preferred
+classifier-label mismatches remain workflow-equivalent, as explained in the earlier review. The
+targeted live run covered four cases / ten events with zero state failures. After tightening the
+clarification wording, both date workflows passed again across six events; semantic review confirms
+the caller is asked to type the format, no DOB is counted early, corrected identity revokes access,
+and the original claim hint is reused after verification. The named-month example now intentionally
+requires restatement too; earlier tests of automatic date conversion are historical evidence.
+
+Offline checks: 75 tests passed, lint and formatting passed, and Streamlit AppTest rendered the
+format note without exceptions. Evidence and remaining unrelated response issues are recorded in
+`outputs/extractor-tuning/format-policy-review.md`. This targeted check does not revalidate all
+conversational behavior or claim deterministic enforcement of arbitrary free-text inputs.
+
+## Extractor prompt iterations
+
+Baseline `f918169` was committed before editing. Five main prompt candidates and one additional
+date-focused candidate were tested with `anthropic/claude-sonnet-4.6`. The prompt now separates facts
+from conversational signals and explicitly preserves factual corrections alongside bypass requests.
+The original name-correction failure no longer occurred in the tested candidates. No schema,
+context-builder, response-prompt, state-machine, or model-setting changes were made.
+
+Three cases were added for identity retraction, ambiguous DOB, and full-ID handling. Both the fifth
+and sixth candidates passed all 25 workflows (74 events), including access revocation and retention
+of the original claim hint. Offline tests: 74 passed; lint and formatting passed.
+
+However, isolated and repeated probes still exposed guessed numeric DOBs; one earlier candidate
+also reversed an explicit date format. Thus the extractor is not fully accepted. The user was asked
+whether deterministic DOB handling at the extraction boundary is acceptable; no such change has
+been made. Known response-only grounding and workflow-communication failures also remain.
+
+Local evidence: `outputs/extractor-tuning/` contains frozen probe inputs, per-candidate prompt
+snapshots and hashes, raw results, full workflow reports, and Langfuse links. `review.md` documents
+the iterations; `workflow-review.md` grades all current-candidate conversations. Two preferred-label
+mismatches were judged workflow-equivalent (email skip and scan guidance), rather than forcing
+exact model classifications. Date errors remain recorded as failures.
+
 ## Langfuse diagnosis on October 7, 2026
 
 Connected the configured US-cloud project and verified exported traces by fetching them back.

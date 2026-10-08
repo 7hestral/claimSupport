@@ -11,10 +11,7 @@
           "session.verification.verified_party_id": null,
           "session.selected_case_id": null,
           "session.phase": "VERIFY_ID"
-        },
-        "present": [
-          "session.memory.intent_hint"
-        ]
+        }
       },
       {
         "event": {

@@ -7,7 +7,7 @@ from .identity import IDENTITY_FIELDS, authorize_representative, verify
 from .memory import transition
 from .repository import FixtureRepository
 from .schemas.facts import Observation, StrictModel
-from .schemas.state import Evidence, Outcome, Phase, Session
+from .schemas.state import Evidence, FollowUp, Outcome, Phase, Session
 
 
 class TurnPlan(StrictModel):
@@ -75,7 +75,7 @@ def identity_plan(
 
 def resolve_case(session: Session, repository: FixtureRepository) -> TurnPlan | None:
     claims = repository.claims_for(session)
-    facts = session.memory
+    facts = session.case_hints
     candidates = claims
     if facts.case_id:
         candidates = [c for c in candidates if c.case_id.casefold() == facts.case_id.casefold()]
@@ -87,10 +87,8 @@ def resolve_case(session: Session, repository: FixtureRepository) -> TurnPlan | 
             candidates = [c for c in candidates if c.created_at.month == facts.case_month]
         if facts.case_year:
             candidates = [c for c in candidates if c.created_at.year == facts.case_year]
-    if len(candidates) != 1 or not facts.intent_hint:
+    if len(candidates) != 1:
         action = "clarify_case" if candidates else "case_not_found"
-        if len(candidates) == 1:
-            action = "clarify_intent"
         return TurnPlan(
             action=action,
             offer_human=not claims,
@@ -106,9 +104,14 @@ def resolve_case(session: Session, repository: FixtureRepository) -> TurnPlan | 
         )
     claim = candidates[0]
     session.selected_case_id = claim.case_id
-    session.outcome = Outcome(
-        case_id=claim.case_id, claim_status=claim.status, claim_summary=claim.summary
-    )
+    if session.outcome.case_id != claim.case_id:
+        if session.outcome.case_id:
+            session.prior_outcomes[session.outcome.case_id] = session.outcome
+        session.outcome = session.prior_outcomes.pop(
+            claim.case_id,
+            Outcome(case_id=claim.case_id, claim_status=claim.status, claim_summary=claim.summary),
+        )
+        session.follow_up = FollowUp(choice=session.follow_up.choice)
     transition(session, Phase.PROCESS_CASE)
     return None
 
@@ -139,14 +142,14 @@ def plan_turn(
         if clarification:
             return clarification
     claim = repository.claim_for(session, session.selected_case_id)
-    evidence = claim_evidence(claim, repository, session.now.date(), observation.topic)
+    evidence = claim_evidence(claim, repository, session.now.date(), session.pending_topics)
     offer_human = observation.alternatives_exhausted or any(
         e.id == "step.expired" for e in evidence
     )
     if session.phase == Phase.PROCESS_CASE:
         if observation.conversation_action == "finish_case" and session.outcome.discussed:
             transition(session, Phase.POST_PROCESS)
-            session.follow_up.email_choice = "pending"
+            session.follow_up.offer_status = "pending"
             customer = repository.customer(session.verification.verified_party_id)
             session.follow_up.recipient = customer.email
             return TurnPlan(action="offer_email", evidence=evidence, offer_human=offer_human)
@@ -156,7 +159,7 @@ def plan_turn(
             action="answer_then_offer_email", evidence=evidence, offer_human=offer_human
         )
     if observation.email_choice in {"send", "skip"}:
-        session.follow_up.email_choice = observation.email_choice
+        session.follow_up.offer_status = "confirmed"
         session.follow_up.delivery = (
             "simulated_only" if observation.email_choice == "send" else "not_requested"
         )

@@ -15,59 +15,94 @@ LangGraph END ends one turn, not the business conversation.
 
 ## Model boundaries
 
-The interpreter receives message history and caller memory. It emits an `Observation`: a fact patch,
-scope, a bounded question topic, and conversational choices. It has no customer registry,
-claim tools, or phase-setting fields. Extraction runs in every phase; clock events skip extraction.
-Omitted/null patch values preserve memory; explicit clear fields remove retracted facts. Corrections
-to identity invalidate access, consent, selected case, and outcome before any further claim read.
-This is automatic structured extraction on every user turn, not optional form-filling tool calls.
+The interpreter receives dialogue, identity memory, optional caller case hints, current selected
+case ID, phase, and last action. It emits an `Observation` containing identity and case-hint patches,
+explicit retractions, optional identity clarifications, multiple guidance topics, scope, and bounded
+conversational choices. It has no customer registry,
+authoritative claim object, or phase-setting fields. Extraction runs in every phase; clock events
+skip extraction. Null patch values preserve memory. An identity correction invalidates access,
+consent, selected case, and outcome; normalized casing/phone-format changes preserve access.
 
-There is no conversation turn cap. The interpreter receives the latest user message in full plus a
-contiguous suffix of whole prior messages capped at 24,000 JSON characters. This is a conservative
-history budget, not model-specific token counting. Memory, phase, and last action are always included.
-The full transcript stays in session state for the UI. Old unstructured details outside the window
-are not summarized; unresolved references require clarification. Memory is a schema of useful caller
-facts, not a complete semantic summary. Extremely long fact values can still grow model input.
-The speaker also receives the latest caller wording and bounded recent dialogue. Identity/case
-changes that invalidate prior claim context reset the speaker's dialogue boundary. Its memory omits
-identity values; known values in dialogue are redacted by case-insensitive literal matching. This is
-best-effort masking, not a general PII detector (alternate date/phone spellings can remain).
+Both models receive the full conversation within the current identity boundary. This preserves
+requests volunteered before verification and multi-part questions without an extracted `intent_hint`
+or single `topic`. An identity change after claim access excludes previous protected dialogue.
+Claim switches retain dialogue for conversational continuity, but only current authorized evidence
+establishes facts about the newly selected claim. Caller values remain visible in dialogue and the
+inspector; no `[provided]` substitution is applied. Telemetry export pseudonymization is separate.
 
-The response model receives masked memory, the current phase prompt, a code-selected action, and
-authorized evidence. It emits a `DraftReply` with conversational text and evidence references.
-Outcome facts and next steps are copied from those references, not accepted as arbitrary model data.
-Invalid references fail the turn. Scope rejections, email-choice confirmations, and terminal
-handoff/exit replies are deterministic.
-Normal turns use two calls to the same OpenRouter model; clock events use at most the response call.
+`clarifications` defaults to an empty list. An entry contains the identity `field`, the ambiguous
+`provided_value`, and a bounded `reason` (`ambiguous_date_order` or `ambiguous_value`). It explains
+the extractor's uncertainty to the speaker without granting access or changing workflow actions.
+Entries are per-turn, not stored preferences; a clear answer removes the need for an entry.
+An ambiguous correction still retracts the old value through `clear_fields`. As with the other
+structured-output fields, the model's wire schema includes the key, using `[]` when not applicable.
+
+There is no silent history window or turn cap. Extremely long chats can hit the model context limit;
+production use would need explicit summarization of unresolved needs/corrections before discarding
+old turns. A failed model call remains an atomic failed turn, not a silent loss of memory.
+
+The response model knows the whole four-stage journey and receives the current phase prompt,
+code-selected action, only that action's instructions, topic-selected authorized evidence, optional
+case hints, and follow-up state. `prompts/actions.json` supplies the current instruction; unrelated
+actions are not included in the response prompt.
+It selects relevant guidance and may answer multiple questions in one response. It emits `DraftReply`
+with text and evidence references. Outcome facts and next steps are copied from referenced evidence.
+Invalid references fail the turn. Scope rejections, final email confirmations, and handoff/exit replies
+are deterministic. Normal turns use two calls; clock events use at most the response call.
+
+### Guidance selection and topic reduction
+
+`Observation.topics` contains zero or more bounded subjects requested in the current turn. It is
+not an intent summary or a replacement for conversation history. `Session.pending_topics` appends
+and deduplicates these in first-seen order, including before verification or while consent/case
+selection is pending. A successful claim response appends/deduplicates them into `Outcome.topics`
+and clears the pending list. This records which subjects reached the speaker, not proof that its
+answers were correct; unresolved questions and semantic review remain separate.
+
+Retrieval includes core authorized claim facts, then only the union of guidance needed by pending
+topics. Document acceptance qualifications accompany format/alternative guidance. Receipt alone
+does not load past document-format or processing-time rules. Unknown/general topics do not expand
+to the whole fixture. Expired deadlines remain an unconditional safety constraint; payment fields
+are included for payment requests or open/closed claim overviews. Follow-up text is indexed by its
+fixture key at repository load time; unrelated fixture rules are not added to response evidence.
+
+An explicit claim switch clears pending topics, while the old claim's handled topics stay with its
+archived outcome. Same-claim refinements retain that history. Identity changes after claim access
+clear pending topics and all outcomes; initial partial verification preserves early requests.
+Closing summaries use recorded outcomes, so reducing current evidence does not erase prior answers.
 
 ### Extractor contract
 
-`Observation` has nine top-level fields, down from fourteen. `facts` holds fifteen nullable caller
-fields (identity, representative role, intent, and case selectors). Omitted facts preserve memory.
-
 | Field | Why code needs it |
 | --- | --- |
-| facts | Verify identity and resolve the authorized case |
-| clear_fields | Explicitly retract previously supplied values |
+| facts | Caller-provided identity and representative fields for verification |
+| clear_fields | Retract identity values |
+| clarifications | Optional per-turn identity ambiguity metadata for the conversation agent; defaults to [] |
+| topics | Multiple requested guidance subjects; appended/deduplicated into pending_topics |
+| case_hints | Optional type/status/month/year/ID clues for authorized claim selection |
+| clear_case_fields | Retract case search clues without changing the database |
 | scope | Reject unrelated requests and count retries |
-| topic | Select applicable fixture guidance |
-| refuses_verification | Count explicit refusal, never anxiety/confusion alone |
-| conversation_action | One of continue, ask_followup, finish_case, request_human, end_conversation |
-| alternatives_exhausted | Offer human review when required documents and substitutes are unavailable |
-| email_choice | Explicit send/skip consent, subject to phase checks |
-| new_case | Reset case selectors when the caller explicitly switches claims |
+| refuses_verification | Count explicit refusal, not emotion alone |
+| conversation_action | continue, ask_followup, finish_case, request_human, or end_conversation |
+| alternatives_exhausted | Offer human review when documents and substitutes are unavailable |
+| email_choice | A per-turn send/skip signal, merged into the one stored follow_up.choice |
+| new_case | Clear old search clues for an explicit switch |
 
-The speaker infers tone directly from dialogue. There is no extracted emotion, rewritten question,
-or duplicate prose case hint. A single action replaces conflicting finish/follow-up/handoff/exit
-booleans; the extractor prioritizes new questions over finishing. The speaker receives phase/action,
-non-identity memory, dialogue, scope, verification field availability, consent status, the human
-offer flag, authorized candidates/evidence, accumulated outcome, email choice/recipient, and demo date.
+Conversation history carries intent and tone. Case hints are never mandatory verification fields.
+Questioning the recorded status is not a case-hint correction. Changes to optional hints trigger
+case resolution without identity verification; resolving to the same claim preserves its outcome.
+Selecting a different claim archives the active outcome by claim ID and starts or resumes the
+selected claim's outcome. The final email includes both prior and current discussed claims, clearly
+attributed. Identity changes clear both. Case switches renew email confirmation while retaining
+this customer's preference. `follow_up.offer_status` tracks whether the final choice is pending or
+confirmed; `delivery` separately records the simulated action. A choice with a new question never
+closes before the question is answered.
 
 ### Streaming and diagnostics
 
 `llm_calls.py` binds the JSON schema, streams raw response chunks, collects provider usage metadata,
 and validates the completed JSON with Pydantic. Response schemas restrict evidence-reference arrays
-to the IDs authorized for that call (and next steps to next-step IDs); no available IDs means an
+to the IDs authorized for that call (and next steps to guidance/next-step IDs, excluding claim facts); no available IDs means an
 empty array. Application validation independently enforces those restrictions before saving.
 The call emits start/delta/finish diagnostics through
 [LangGraph custom streaming](https://reference.langchain.com/python/langgraph/types/StreamWriter).
@@ -87,7 +122,7 @@ zero or an estimate. Fixed replies do not generate a response-call trace.
 | Phase | Exit condition |
 | --- | --- |
 | VERIFY_ID | Three matching PII fields, one customer, no supplied conflicts; representative consent if needed |
-| RESOLVE_INTENT | A remembered intent and exactly one authorized matching case |
+| RESOLVE_INTENT | Exactly one authorized matching case; the speaker uses dialogue to understand or clarify the need |
 | PROCESS_CASE | A discussed outcome and caller readiness without another follow-up question |
 | POST_PROCESS | Explicit send or skip after the offer |
 
@@ -100,8 +135,9 @@ phase progression. Neither path grants access or claims that an external action 
 
 `FixtureRepository.claims_for` and `claim_for` enforce access and customer ownership. Claim status is
 read-only. Document requirements use canonical identifiers shared with guideline keys; display labels
-are separate. Guidance is selected by topic and only supplies document-specific instructions for
-documents actually requested on that claim. Monetary values are decimal USD strings in fixtures.
+are separate. All applicable guidance is supplied together, with document-specific instructions only for
+documents actually requested on that claim. Fixture topic labels are evidence identifiers, not a
+required classifier. Monetary values are decimal USD strings in fixtures.
 
 Representative identity is limited to the supplied relationship fixture plus matching policyholder
 PII and simulated consent. The default sequence is pending then approved; timeout stays pending.

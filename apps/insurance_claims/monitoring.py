@@ -130,6 +130,8 @@ def record_decision(session: Session, observation, plan) -> None:
             "verification": session.verification.model_dump(mode="json"),
             "authorization": session.authorization.model_dump(mode="json"),
             "memory": session.memory.model_dump(mode="json"),
+            "case_hints": session.case_hints.model_dump(mode="json"),
+            "pending_topics": session.pending_topics,
             "plan": plan.model_dump(mode="json"),
         },
     ):

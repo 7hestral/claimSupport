@@ -1,0 +1,215 @@
+[
+  {
+    "id": "compound_followup",
+    "review": "Address BOTH how to submit a readable scan (including any original requirement) AND how long review takes. Then address BOTH missing-record alternatives and receipt confirmation. Select relevant fixture guidance freely; no topic label or exact wording is required. Never claim documents have arrived or guarantee approval. Final summary covers the major questions and next steps actually discussed.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. DOB 1985-03-15, SSN last four 4472. Why was my January healthcare claim denied?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048"
+        }
+      },
+      {
+        "event": {
+          "text": "Can I upload a scan, where would I send it, and how long does review take after you get it?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048"
+        }
+      },
+      {
+        "event": {
+          "text": "And if the hospital cannot find the original, what else can I do? How would I know my upload arrived?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048"
+        }
+      },
+      {
+        "event": {
+          "text": "That answers my questions, thank you."
+        },
+        "expect": {
+          "session.phase": "POST_PROCESS",
+          "session.follow_up.offer_status": "pending"
+        }
+      },
+      {
+        "event": {
+          "text": "Send the summary please."
+        },
+        "expect": {
+          "session.disposition": "completed",
+          "session.follow_up.choice": "send",
+          "session.follow_up.delivery": "simulated_only"
+        }
+      }
+    ]
+  },
+  {
+    "id": "early_requests",
+    "review": "Remember the initial request for scan requirements AND processing time across identity clarification. Explain why verification comes first and reassure the caller about the optional end-of-conversation email summary when asked. After verification, answer the early questions without asking what the caller wanted again. Never confirm claim details before verification.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm the policyholder Margaret Chen. For my denied January healthcare claim I need to know whether a scan works AND how long review takes. Will I get a summary at the end?"
+        },
+        "expect": {
+          "session.phase": "VERIFY_ID",
+          "session.verification.verified_party_id": null
+        }
+      },
+      {
+        "event": {
+          "text": "Why do you need more details? I thought my name was enough."
+        },
+        "expect": {
+          "session.phase": "VERIFY_ID",
+          "session.verification.verified_party_id": null
+        }
+      },
+      {
+        "event": {
+          "text": "My date of birth is March 15, 1985. My SSN last four is 4472."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048"
+        }
+      }
+    ]
+  },
+  {
+    "id": "optional_claim_hints",
+    "review": "Identity verification does not require claim status, type, date or claim ID. Retrieve authorized candidates, clarify only which claim is intended, and use the caller response without repeating identity intake. Do not require a structured intent description when the user can discuss the selected claim naturally.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. DOB 1985-03-15, SSN last four 4472. I have a claim question but do not know the date or claim number."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "RESOLVE_INTENT",
+          "session.selected_case_id": null
+        }
+      },
+      {
+        "event": {
+          "text": "The dental one. Was anything paid?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-1899",
+          "session.outcome.claim_status": "closed"
+        }
+      }
+    ]
+  },
+  {
+    "id": "claim_discrepancy",
+    "review": "Treat a belief that the selected claim was approved as a discrepancy/question, not a database update, identity change, or automatic case switch. Explain the recorded denial. An explicit ID for the SAME claim should preserve prior discussion. An explicit switch to the older January claim should reuse verification and replace the active claim outcome.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. DOB 1985-03-15, SSN last four 4472. Explain my denied January healthcare claim."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048"
+        }
+      },
+      {
+        "event": {
+          "text": "I thought this same claim was approved. Why does your record say otherwise?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048",
+          "session.outcome.claim_status": "denied"
+        }
+      },
+      {
+        "event": {
+          "text": "I found the reference: CL-2048. Still the same claim. How long would reviewing the missing files take?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048"
+        }
+      },
+      {
+        "event": {
+          "text": "Now switch to my January 2025 healthcare claim. Has it been paid?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2011",
+          "session.outcome.claim_status": "closed"
+        }
+      }
+    ]
+  },
+  {
+    "id": "early_email_change",
+    "review": "Remember an early explicit email request and explain that the optional summary comes after claim support. Do not send or close early. At the end acknowledge the remembered preference without saying it has already been sent. Permit a changed choice to skip with no persuasion. The final draft includes the grounded discussion and next steps.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm the policyholder Margaret Chen. Please email me a summary at the end. I need help with my denied January healthcare claim."
+        },
+        "expect": {
+          "session.phase": "VERIFY_ID",
+          "session.follow_up.choice": "send",
+          "session.follow_up.delivery": "not_requested"
+        }
+      },
+      {
+        "event": {
+          "text": "DOB 1985-03-15, SSN last four 4472."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "PROCESS_CASE",
+          "session.selected_case_id": "CL-2048",
+          "session.follow_up.choice": "send",
+          "session.follow_up.delivery": "not_requested"
+        }
+      },
+      {
+        "event": {
+          "text": "That answers my questions; I am ready to finish."
+        },
+        "expect": {
+          "session.phase": "POST_PROCESS",
+          "session.follow_up.choice": "send",
+          "session.follow_up.offer_status": "pending",
+          "session.disposition": "active"
+        }
+      },
+      {
+        "event": {
+          "text": "Actually, skip the email."
+        },
+        "expect": {
+          "session.disposition": "completed",
+          "session.follow_up.choice": "skip",
+          "session.follow_up.delivery": "not_requested"
+        }
+      }
+    ]
+  }
+]

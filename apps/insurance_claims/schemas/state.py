@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from pydantic import Field
 
-from .facts import ConversationMemory, IdentityField, OutputModel, StrictModel
+from .facts import CallerFacts, CaseHints, IdentityField, OutputModel, StrictModel, Topic
 
 
 class Phase(StrEnum):
@@ -47,6 +47,7 @@ class Outcome(StrictModel):
     case_id: str | None = None
     claim_status: str | None = None
     claim_summary: str | None = None
+    topics: list[Topic] = Field(default_factory=list)
     discussed: list[Evidence] = Field(default_factory=list)
     next_steps: list[Evidence] = Field(default_factory=list)
     unresolved_questions: list[str] = Field(default_factory=list)
@@ -54,7 +55,8 @@ class Outcome(StrictModel):
 
 
 class FollowUp(StrictModel):
-    email_choice: Literal["not_asked", "pending", "send", "skip"] = "not_asked"
+    choice: Literal["unknown", "send", "skip"] = "unknown"
+    offer_status: Literal["not_offered", "pending", "confirmed"] = "not_offered"
     recipient: str | None = None
     email_draft: str | None = None
     delivery: Literal["not_requested", "simulated_only"] = "not_requested"
@@ -64,12 +66,15 @@ class Session(StrictModel):
     session_id: str = Field(default_factory=lambda: str(uuid4()))
     messages: list[Message] = Field(default_factory=list)
     dialogue_start: int = 0
-    memory: ConversationMemory = Field(default_factory=ConversationMemory)
+    memory: CallerFacts = Field(default_factory=CallerFacts)
+    case_hints: CaseHints = Field(default_factory=CaseHints)
+    pending_topics: list[Topic] = Field(default_factory=list)
     phase: Phase = Phase.VERIFY_ID
     verification: Verification = Field(default_factory=Verification)
     authorization: Authorization = Field(default_factory=Authorization)
     selected_case_id: str | None = None
     outcome: Outcome = Field(default_factory=Outcome)
+    prior_outcomes: dict[str, Outcome] = Field(default_factory=dict)
     follow_up: FollowUp = Field(default_factory=FollowUp)
     out_of_scope_attempts: int = 0
     recovery_attempts: int = 0

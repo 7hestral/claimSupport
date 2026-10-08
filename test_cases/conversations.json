@@ -11,9 +11,9 @@
           "session.verification.verified_party_id": "P9",
           "session.selected_case_id": "CL-2048",
           "session.phase": "PROCESS_CASE",
-          "session.memory.case_month": 1,
-          "session.memory.case_type": "healthcare",
-          "session.memory.case_status": "denied"
+          "session.case_hints.case_month": 1,
+          "session.case_hints.case_type": "healthcare",
+          "session.case_hints.case_status": "denied"
         },
         "includes": {
           "session.verification.matched_fields": [
@@ -26,10 +26,7 @@
             "RESOLVE_INTENT",
             "PROCESS_CASE"
           ]
-        },
-        "present": [
-          "session.memory.intent_hint"
-        ]
+        }
       },
       {
         "event": {
@@ -46,7 +43,7 @@
         },
         "expect": {
           "session.disposition": "completed",
-          "session.follow_up.email_choice": "send",
+          "session.follow_up.choice": "send",
           "session.follow_up.delivery": "simulated_only"
         },
         "present": [
@@ -69,14 +66,11 @@
         },
         "expect": {
           "session.last_action": "collect_identity",
-          "session.memory.case_month": 1,
-          "session.memory.case_status": "denied",
-          "session.memory.case_type": "healthcare",
+          "session.case_hints.case_month": 1,
+          "session.case_hints.case_status": "denied",
+          "session.case_hints.case_type": "healthcare",
           "session.verification.verified_party_id": null
-        },
-        "present": [
-          "session.memory.intent_hint"
-        ]
+        }
       },
       {
         "event": {
@@ -119,7 +113,7 @@
         },
         "expect": {
           "session.disposition": "completed",
-          "session.follow_up.email_choice": "skip"
+          "session.follow_up.choice": "skip"
         }
       }
     ]
@@ -251,7 +245,7 @@
   },
   {
     "id": "followup",
-    "review": "A thanks-plus-question is answered without closing. An email send choice with a new question does not complete the conversation; answer the question and offer the choice again.",
+    "review": "Answer compound or follow-up questions before closing. Remember send alongside a new question without claiming delivery or losing the question. Renew the closing choice; accept a subsequent skip without persuasion. Retain the scan/original qualification and do not invent receipt confirmation.",
     "steps": [
       {
         "event": {
@@ -289,7 +283,8 @@
           "observation.conversation_action": "ask_followup",
           "session.last_action": "answer_then_offer_email",
           "session.disposition": "active",
-          "session.follow_up.email_choice": "pending"
+          "session.follow_up.offer_status": "pending",
+          "session.follow_up.choice": "send"
         }
       },
       {
@@ -298,7 +293,7 @@
         },
         "expect": {
           "session.disposition": "completed",
-          "session.follow_up.email_choice": "skip"
+          "session.follow_up.choice": "skip"
         }
       }
     ]
