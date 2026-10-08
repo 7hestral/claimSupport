@@ -8,7 +8,7 @@ from apps.insurance_claims.schemas.state import DraftReply, Event, Session
 
 def test_untrusted_output_cannot_reference_unauthorized_evidence(harness, margaret):
     turn, model, initial = harness(margaret)
-    model.respond = lambda context: DraftReply(
+    model.respond = lambda context, **kwargs: DraftReply(
         reply="Made up", discussed_evidence_ids=["foreign.claim"]
     )
     with pytest.raises(ValueError, match="outside the authorized"):
@@ -34,7 +34,7 @@ def test_conversations_are_isolated_and_debug_state_masks_identity(harness, marg
 def test_failed_model_call_does_not_commit_extracted_identity(harness, margaret):
     turn, model, initial = harness(margaret)
 
-    def fail(context):
+    def fail(context, **kwargs):
         raise TimeoutError("Model unavailable")
 
     model.respond = fail

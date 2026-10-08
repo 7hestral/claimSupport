@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import StreamWriter
 
 from .memory import merge_memory
 from .policy import TurnPlan, plan_turn
@@ -23,7 +24,7 @@ class TurnState(TypedDict):
 
 
 def build_workflow(reasoner: Reasoner, repository: FixtureRepository):
-    def interpret(state: TurnState) -> dict:
+    def interpret(state: TurnState, writer: StreamWriter) -> dict:
         session = state["session"].model_copy(deep=True)
         event = state["event"]
         if session.disposition != "active":
@@ -37,19 +38,22 @@ def build_workflow(reasoner: Reasoner, repository: FixtureRepository):
             if not event.text.strip() or len(event.text) > 12000:
                 raise ValueError("Enter a message between 1 and 12000 characters.")
             session.messages.append(Message(role="user", content=event.text.strip()))
-            observation = reasoner.interpret(session)
+            observation = reasoner.interpret(session, emit=writer)
             merge_memory(session, observation)
         return {"session": session, "observation": observation}
 
     def decide(state: TurnState) -> dict:
         return {"plan": plan_turn(state["session"], state["observation"], repository)}
 
-    def compose(state: TurnState) -> dict:
+    def compose(state: TurnState, writer: StreamWriter) -> dict:
         plan = state["plan"]
         if plan.fixed_reply:
             draft = DraftReply(reply=plan.fixed_reply)
         else:
-            draft = reasoner.respond(response_context(state["session"], state["observation"], plan))
+            draft = reasoner.respond(
+                response_context(state["session"], state["observation"], plan, state["event"]),
+                emit=writer,
+            )
         return {"draft": draft}
 
     def record(state: TurnState) -> dict:

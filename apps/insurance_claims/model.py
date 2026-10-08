@@ -15,5 +15,10 @@ def create_model() -> ChatOpenRouter:
         raise ValueError("Set OPENROUTER_API_KEY and OPENROUTER_MODEL in .env.")
     # ChatOpenRouter's SDK timeout is milliseconds, not seconds.
     return ChatOpenRouter(
-        model=model, api_key=api_key, temperature=0, max_retries=0, timeout=60_000
+        model=model,
+        api_key=api_key,
+        temperature=0,
+        max_retries=0,
+        timeout=60_000,
+        stream_usage=True,
     )

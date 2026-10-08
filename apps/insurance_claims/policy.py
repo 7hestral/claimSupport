@@ -38,12 +38,7 @@ def identity_plan(
     made_progress = any(getattr(observation.facts, key) is not None for key in IDENTITY_FIELDS)
     if made_progress:
         session.recovery_attempts = 0
-    elif observation.refuses_verification or observation.emotion in {
-        "frustrated",
-        "angry",
-        "anxious",
-        "confused",
-    }:
+    elif observation.refuses_verification:
         session.recovery_attempts += 1
     if session.memory.caller_role is None:
         return TurnPlan(action="confirm_caller_role", offer_human=session.recovery_attempts >= 2)
@@ -121,9 +116,9 @@ def resolve_case(session: Session, repository: FixtureRepository) -> TurnPlan | 
 def plan_turn(
     session: Session, observation: Observation, repository: FixtureRepository
 ) -> TurnPlan:
-    if observation.request_human:
+    if observation.conversation_action == "request_human":
         return handoff(session, "Caller requested human support.")
-    if observation.end_conversation:
+    if observation.conversation_action == "end_conversation":
         session.disposition = "ended"
         return TurnPlan(
             action="ended",
@@ -149,18 +144,14 @@ def plan_turn(
         e.id == "step.expired" for e in evidence
     )
     if session.phase == Phase.PROCESS_CASE:
-        if (
-            observation.ready_to_close
-            and not observation.has_followup
-            and session.outcome.discussed
-        ):
+        if observation.conversation_action == "finish_case" and session.outcome.discussed:
             transition(session, Phase.POST_PROCESS)
             session.follow_up.email_choice = "pending"
             customer = repository.customer(session.verification.verified_party_id)
             session.follow_up.recipient = customer.email
             return TurnPlan(action="offer_email", evidence=evidence, offer_human=offer_human)
         return TurnPlan(action="answer_case", evidence=evidence, offer_human=offer_human)
-    if observation.has_followup:
+    if observation.conversation_action == "ask_followup":
         return TurnPlan(
             action="answer_then_offer_email", evidence=evidence, offer_human=offer_human
         )

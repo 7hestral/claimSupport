@@ -4,15 +4,15 @@ import pytest
 
 from apps.insurance_claims.repository import FixtureRepository
 from apps.insurance_claims.schemas.facts import CallerFacts, Observation
-from apps.insurance_claims.schemas.state import Phase
+from apps.insurance_claims.schemas.state import Event, Phase
 
 
 @pytest.mark.parametrize("choice", ["send", "skip"])
 def test_full_conversation_requires_wrapup_and_explicit_email_choice(harness, margaret, choice):
     turn, _, _ = harness(
         margaret,
-        Observation(topic="submission", has_followup=True),
-        Observation(ready_to_close=True),
+        Observation(topic="submission", conversation_action="ask_followup"),
+        Observation(conversation_action="finish_case"),
         Observation(email_choice=choice),
     )
     session = turn()
@@ -128,21 +128,26 @@ def test_ambiguous_january_claim_requires_clarification(harness, margaret):
 
 def test_identity_correction_revokes_access_and_clears_outcome(harness, margaret):
     turn, model, _ = harness(margaret, Observation(facts=CallerFacts(full_name="Ma Tian")))
-    session = turn(turn())
+    session = turn()
+    session.messages[-1].content = "The pathology report is missing from CL-2048."
+    session = turn(session, Event(text="Actually, my name is Ma Tian."))
     assert session.phase == Phase.VERIFY_ID
     assert session.verification.verified_party_id is None
     assert session.selected_case_id is None
     assert session.outcome.case_id is None
     assert model.contexts[-1]["evidence"] == []
     assert model.contexts[-1]["outcome"]["discussed"] == []
+    assert model.contexts[-1]["history"] == []
+    assert "pathology" not in str(model.contexts[-1])
+    assert model.contexts[-1]["latest_user_message"] == "Actually, my name is [provided]."
 
 
 def test_followup_does_not_close_case_or_accept_email_prematurely(harness, margaret):
     turn, _, _ = harness(
         margaret,
-        Observation(ready_to_close=True, has_followup=True, topic="format", email_choice="send"),
-        Observation(ready_to_close=True),
-        Observation(has_followup=True, topic="receipt", email_choice="send"),
+        Observation(conversation_action="ask_followup", topic="format", email_choice="send"),
+        Observation(conversation_action="finish_case"),
+        Observation(conversation_action="ask_followup", topic="receipt", email_choice="send"),
     )
     session = turn(turn())
     assert session.phase == Phase.PROCESS_CASE
@@ -156,7 +161,7 @@ def test_followup_does_not_close_case_or_accept_email_prematurely(harness, marga
 
 def test_early_email_preference_is_remembered_but_requires_later_confirmation(harness, margaret):
     margaret.email_choice = "send"
-    turn, _, _ = harness(margaret, Observation(ready_to_close=True))
+    turn, _, _ = harness(margaret, Observation(conversation_action="finish_case"))
     session = turn()
     assert session.memory.summary_preference == "send"
     assert session.follow_up.email_choice == "not_asked"
@@ -181,7 +186,7 @@ def test_switching_cases_reuses_identity_and_replaces_case_outcome(
         Observation(
             new_case=True,
             topic="payment",
-            has_followup=True,
+            conversation_action="ask_followup",
             facts=CallerFacts(case_type=case_type, intent_hint="Explain payment"),
         ),
     )

@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, time
 
 import streamlit as st
 
+from .debug_ui import debug_console, record_event
 from .model import create_model
 from .presentation import inspector
 from .reasoner import OpenRouterReasoner
@@ -20,22 +21,39 @@ SAMPLE = (
 
 
 def submit(event: Event) -> None:
+    traces = st.session_state.setdefault("llm_traces", {})
+    live_debug = st.empty()
     try:
         if "workflow" not in st.session_state:
             st.session_state.workflow = build_workflow(
                 OpenRouterReasoner(create_model()), FixtureRepository()
             )
-        result = st.session_state.workflow.invoke(
-            {
-                "session": st.session_state.conversation,
-                "event": event,
-            }
-        )
+        result = None
+        for mode, update in st.session_state.workflow.stream(
+            {"session": st.session_state.conversation, "event": event},
+            stream_mode=["custom", "updates"],
+        ):
+            if mode == "custom":
+                trace = record_event(traces, update)
+                if update["type"] == "start":
+                    with live_debug.container():
+                        st.caption(
+                            f"Live debug · {trace.stage} · {trace.model} · unvalidated output"
+                        )
+                        with st.expander("Input messages and output schema"):
+                            st.json(trace.messages, expanded=False)
+                            st.json(trace.response_format, expanded=False)
+                        output = st.empty()
+                output.code(trace.output_text, language="json")
+            elif "record" in update:
+                result = update["record"]
+        if result is None:
+            raise RuntimeError("Workflow ended without a recorded turn.")
     except Exception as error:  # noqa: BLE001 - one outer UI boundary, with a visible failure.
         # UI boundary: do not display SDK request bodies, secrets, or partial graph state.
         st.error(
             f"The turn failed ({type(error).__name__}). Your conversation was not changed. "
-            "Check the OpenRouter key, model access, and structured-output support, then retry."
+            "Inspect the LLM debug tab for call details. If no call started, check the model configuration."
         )
         return
     st.session_state.conversation = result["session"]
@@ -49,6 +67,7 @@ def controls(session: Session) -> None:
         demo_date = st.date_input("New conversation date", value=date(2026, 3, 10))
         if st.button("New conversation", use_container_width=True):
             st.session_state.pop("workflow", None)
+            st.session_state.pop("llm_traces", None)
             st.session_state.conversation = Session(
                 consent_scenario=scenario,
                 now=datetime.combine(demo_date, time(10), tzinfo=UTC),
@@ -144,7 +163,11 @@ def main() -> None:
             )
         outcome_view(session)
     with state_panel:
-        st.subheader("Workflow state")
-        st.badge(session.phase.value, color="blue")
-        st.caption("Identity values are masked. This panel is for the demo tester.")
-        st.json(inspector(session), expanded=2)
+        state_tab, debug_tab = st.tabs(["Workflow state", "LLM debug"])
+        with state_tab:
+            st.subheader("Workflow state")
+            st.badge(session.phase.value, color="blue")
+            st.caption("Identity values are masked. This panel is for the demo tester.")
+            st.json(inspector(session), expanded=2)
+        with debug_tab:
+            debug_console(st.session_state.get("llm_traces", {}))

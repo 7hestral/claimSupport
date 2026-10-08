@@ -63,6 +63,7 @@ class FollowUp(StrictModel):
 class Session(StrictModel):
     session_id: str = Field(default_factory=lambda: str(uuid4()))
     messages: list[Message] = Field(default_factory=list)
+    dialogue_start: int = 0
     memory: ConversationMemory = Field(default_factory=ConversationMemory)
     phase: Phase = Phase.VERIFY_ID
     verification: Verification = Field(default_factory=Verification)

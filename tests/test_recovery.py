@@ -22,7 +22,7 @@ def test_three_distinct_failed_submissions_limit_verification(harness, margaret)
     invalid.facts.dob = date(1985, 3, 16)
     turn, model, _ = harness(
         invalid,
-        Observation(relevant_question="Why verify?"),
+        Observation(),
         Observation(facts=CallerFacts(dob="1985-03-17")),
         Observation(facts=CallerFacts(dob="1985-03-18")),
     )
@@ -41,11 +41,10 @@ def test_repeated_refusal_offers_human_without_bypassing_gate(harness, role):
     turn, model, _ = harness(
         Observation(
             facts=CallerFacts(caller_role=role),
-            emotion="angry",
             refuses_verification=True,
         ),
-        Observation(emotion="frustrated", refuses_verification=True),
-        Observation(request_human=True),
+        Observation(refuses_verification=True),
+        Observation(conversation_action="request_human"),
     )
     session = turn(turn())
     assert model.contexts[-1]["offer_human"]
@@ -53,6 +52,24 @@ def test_repeated_refusal_offers_human_without_bypassing_gate(harness, role):
     session = turn(session)
     assert session.disposition == "handoff_requested"
     assert session.outcome.handoff_reason == "Caller requested human support."
+
+
+def test_emotional_process_questions_reach_speaker_without_counting_as_refusal(harness):
+    turn, model, initial = harness(
+        Observation(facts=CallerFacts(full_name="Margaret Chen", caller_role="policyholder")),
+        Observation(),
+        Observation(),
+    )
+    session = turn(initial, Event(text="I'm Margaret Chen, the policyholder."))
+    session = turn(session, Event(text="I'm anxious. Why do you need to know that?"))
+    session = turn(session, Event(text="I'm still confused. Can you explain the options?"))
+    context = model.contexts[-1]
+    assert session.recovery_attempts == 0
+    assert not context["offer_human"]
+    assert context["latest_user_message"] == "I'm still confused. Can you explain the options?"
+    assert any("I'm anxious" in message["content"] for message in context["history"])
+    assert "Margaret Chen" not in str(context)
+    assert not context["evidence"]
 
 
 @pytest.mark.parametrize(

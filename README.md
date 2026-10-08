@@ -71,7 +71,8 @@ before polling, so advancing directly to expiry cannot grant late approval.
 - The shared response model gets phase instructions, masked memory, an application-selected action,
   and authorized evidence. It cannot set the phase, authorize access, or mutate claim records.
 - Three distinct failed verification submissions offer human support. Clarifications do not count.
-  Two unsuccessful emotional-recovery turns offer human support. Explicit handoff requests exit.
+  Two refusal turns without identity progress offer human support. Emotion alone does not count.
+  Explicit handoff requests exit.
 - A filled outcome does not end processing. The caller must indicate readiness to wrap up without a
   new question. Email choice is accepted only after the summary offer; silence is not consent.
 - Outcomes retain fixture-backed facts and suggested steps separately from unchanged claim status.
@@ -96,6 +97,9 @@ apps/insurance_claims/
   memory.py                    fact merging and access invalidation
   presentation.py              model context, outcome, email draft, and inspector
   reasoner.py                   two structured calls to the same model
+  llm_calls.py                  streaming, output validation, token usage, and call events
+  context.py                    bounded dialogue windows
+  debug_ui.py                   local model traces and token totals
   model.py                     OpenRouter configuration
   ui.py                        chat and demo controls
   fixtures/                    sample customers, claims, and guidance
@@ -118,4 +122,21 @@ An optional live acceptance check makes OpenRouter calls using `.env` and incurs
 
 ```shell
 uv run python -m scripts.live_smoke
+uv run python -m scripts.live_smoke --case all
 ```
+
+See [test coverage and review criteria](test_cases/README.md) and the reusable natural-language
+[scenario collection](test_cases/conversations.json). Live checks save replies and authorized
+evidence to `outputs/live-conversations.json` for qualitative review. State assertions alone do not
+grade empathy or prove factual grounding.
+
+There is no turn-count limit. Model history uses a sliding window of up to 24,000 JSON characters;
+the latest message and structured caller memory are always included. The full transcript remains
+visible in the UI. A completed, ended, or handed-off conversation requires starting a new one.
+
+The **LLM debug** tab shows input/output token totals separately for extraction and response. Each
+call exposes its prompts, output schema, raw output, parsed result, latency, and provider token
+metadata. During a turn, a live debug panel streams raw JSON; the customer reply appears only after
+validation. Failed-call diagnostics survive a failed turn. Missing token metadata is shown as
+unavailable. Raw debug inputs contain supplied identity details; this is a local tester console.
+New conversation clears the traces. No API key or transport headers are recorded.

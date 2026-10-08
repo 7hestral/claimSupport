@@ -1,9 +1,12 @@
 """Safe model context, evidence-backed outcomes, and the simulated email draft."""
 
+import re
+
+from .context import recent_history
 from .identity import IDENTITY_FIELDS
 from .policy import TurnPlan
 from .schemas.facts import Observation
-from .schemas.state import DraftReply, Message, Phase, Session
+from .schemas.state import DraftReply, Event, Message, Phase, Session
 
 PRIVATE_FIELDS = (*IDENTITY_FIELDS, "policy_number", "representative_name")
 
@@ -12,7 +15,7 @@ def redact(text: str, session: Session) -> str:
     for field in PRIVATE_FIELDS:
         value = getattr(session.memory, field)
         if value is not None:
-            text = text.replace(str(value), "[provided]")
+            text = re.sub(re.escape(str(value)), "[provided]", text, flags=re.IGNORECASE)
     return text
 
 
@@ -27,25 +30,33 @@ def masked_memory(session: Session) -> dict:
     }
 
 
-def response_context(session: Session, observation: Observation, plan: TurnPlan) -> dict:
-    # The speaker never receives the policyholder registry or raw verification fields.
-    memory = masked_memory(session)
-    question = observation.relevant_question
-    if question:
-        question = redact(question, session)
+def response_context(
+    session: Session, observation: Observation, plan: TurnPlan, event: Event
+) -> dict:
+    # Dialogue is caller context, never evidence. Drop prior dialogue on identity/case changes.
+    history = recent_history(
+        session, start=session.dialogue_start, include_last=event.kind == "advance_time"
+    )
+    memory = {
+        key: value
+        for key, value in masked_memory(session).items()
+        if key not in PRIVATE_FIELDS and key != "id_type"
+    }
     return {
         "phase": session.phase.value,
         "action": plan.action,
         "memory": memory,
-        "emotion": observation.emotion,
-        "refuses_verification": observation.refuses_verification,
         "scope": observation.scope,
-        "question": question,
+        "event": event.kind,
+        "latest_user_message": redact(event.text, session) if event.kind == "message" else None,
+        "history": [
+            {**message, "content": redact(message["content"], session)} for message in history
+        ],
         "identity_verified": session.verification.verified_party_id is not None,
         "supplied_identity_fields": [
             key for key in IDENTITY_FIELDS if getattr(session.memory, key) is not None
         ],
-        "authorization": session.authorization.model_dump(mode="json"),
+        "authorization_status": session.authorization.status,
         "offer_human": plan.offer_human,
         "candidates": plan.candidates,
         "evidence": [e.model_dump() for e in plan.evidence],

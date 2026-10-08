@@ -15,7 +15,7 @@ def test_chat_ui_renders_outcome_and_resets_conversation(margaret):
         ScriptedReasoner(
             [
                 margaret,
-                Observation(ready_to_close=True),
+                Observation(conversation_action="finish_case"),
                 Observation(email_choice="skip"),
             ]
         ),

@@ -17,7 +17,6 @@ MemoryField = Literal[
     "caller_role",
     "representative_name",
     "intent_hint",
-    "case_hint",
     "case_type",
     "case_status",
     "case_month",
@@ -67,7 +66,6 @@ class CallerFacts(OutputModel):
     caller_role: Literal["policyholder", "representative"] | None = None
     representative_name: str | None = None
     intent_hint: str | None = None
-    case_hint: str | None = None
     case_type: Literal["healthcare", "dental", "auto"] | None = None
     case_status: Literal["denied", "open", "closed"] | None = None
     case_month: int | None = Field(default=None, ge=1, le=12)
@@ -85,14 +83,11 @@ class Observation(OutputModel):
     facts: CallerFacts = Field(default_factory=CallerFacts)
     clear_fields: list[MemoryField] = Field(default_factory=list)
     scope: Literal["in_scope", "out_of_scope", "mixed"] = "in_scope"
-    emotion: Literal["neutral", "frustrated", "anxious", "angry", "confused"] = "neutral"
     topic: Topic = "general"
-    relevant_question: str = ""
     refuses_verification: bool = False
-    request_human: bool = False
-    end_conversation: bool = False
-    ready_to_close: bool = False
-    has_followup: bool = False
+    conversation_action: Literal[
+        "continue", "ask_followup", "finish_case", "request_human", "end_conversation"
+    ] = "continue"
     alternatives_exhausted: bool = False
     email_choice: Literal["unknown", "send", "skip"] = "unknown"
     new_case: bool = False
