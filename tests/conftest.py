@@ -4,12 +4,15 @@ from collections import deque
 
 import pytest
 from langchain_core.messages import AIMessageChunk
+from streamlit.testing.v1 import AppTest
 
-from apps.insurance_claims.monitoring import monitoring_client
-from apps.insurance_claims.repository import FixtureRepository
+from apps.insurance_claims import PROJECT_ROOT
+from apps.insurance_claims.data.repository import FixtureRepository
+from apps.insurance_claims.llm import model
+from apps.insurance_claims.observability.monitoring import monitoring_client
 from apps.insurance_claims.schemas.facts import CallerFacts, CaseHints, Observation
 from apps.insurance_claims.schemas.state import DraftReply, Event, Session
-from apps.insurance_claims.workflow import build_workflow
+from apps.insurance_claims.workflow.graph import build_workflow
 
 
 @pytest.fixture(autouse=True)
@@ -18,6 +21,15 @@ def disable_external_monitoring(monkeypatch):
     monitoring_client.cache_clear()
     yield
     monitoring_client.cache_clear()
+
+
+@pytest.fixture
+def ui_app(monkeypatch):
+    """Keep UI tests independent of developer credentials and local .env files."""
+    monkeypatch.setattr(model, "dotenv_values", lambda path: {})
+    monkeypatch.setenv("OPENROUTER_API_KEY", "ui-test-key")
+    monkeypatch.delenv("OPENROUTER_MODEL", raising=False)
+    return AppTest.from_file(str(PROJECT_ROOT / "app.py"))
 
 
 class ScriptedReasoner:

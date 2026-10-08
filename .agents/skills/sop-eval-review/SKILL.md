@@ -6,13 +6,13 @@ description: Review this repository's insurance SOP conversation outputs against
 # SOP conversation review
 
 Read [the original assignment](../../../docs/assignment/original.txt) first, then
-[the rubric](../../../test_cases/rubric.md) and the relevant scenario `review` descriptions.
+[the rubric](../../../evals/rubric.md) and the relevant scenario `review` descriptions.
 The assignment defines acceptance; the rubric interprets it and case notes exercise it.
 Distinguish assignment requirements from documented demo choices (simulated delivery, consent,
 attempt limits). Do not require our extractor fields, topic taxonomy, exact action labels, or a
 particular dialogue structure as evidence of successful understanding. Consult the source fixtures
 for substantive claims and guidance, not generated answers or earlier review conclusions.
-Use [the case guide](../../../test_cases/README.md) for runner commands and fixture coverage.
+Use [the case guide](../../../evals/README.md) for runner commands and fixture coverage.
 
 This skill guides the invoking agent; it does not automatically spawn a reviewer. If a separate
 reviewer is authorized, give it the assignment, this skill, rubric, case definitions, fixtures,
@@ -22,7 +22,7 @@ independent agent; do not present self-review as independent validation.
 
 ## Evidence
 
-For a fresh evaluation, run the selected scenarios with `python -m scripts.live_smoke --case <ids>`
+For a fresh evaluation, run the selected scenarios with `python -m evals --case <ids>`
 using the project environment. Live runs use configured model credits; `--list` is offline.
 Use a separate output filename so earlier evidence remains available. When reviewing existing
 outputs, do not imply a new run occurred. State the artifact, model, and scenarios actually reviewed.

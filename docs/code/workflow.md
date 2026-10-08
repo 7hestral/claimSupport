@@ -13,10 +13,73 @@ retain the returned session. Streamlit holds it in browser-session state. The gr
 input session, so failures cannot commit partial memory, authorization, or conversation changes.
 LangGraph END ends one turn, not the business conversation.
 
+## Code organization
+
+`app.py` starts `apps.insurance_claims.ui.app.main`. Application files are grouped under
+`apps/insurance_claims/` by the responsibility they own:
+
+| Package | Responsibility |
+| --- | --- |
+| `workflow/` | `graph.py` coordinates turns; policy, identity, memory, guidance, context, and presentation modules implement the SOP |
+| `llm/` | OpenRouter configuration, the reasoner, structured streaming calls, and their `prompts/` resources |
+| `data/` | Authorized fixture access in `repository.py` and the synthetic records in `fixtures/` |
+| `ui/` | Chat in `app.py`, credential controls in `connection.py`, and diagnostics in `debug.py` |
+| `observability/` | Optional Langfuse integration and masking of exported identities |
+| `schemas/` | Shared contracts for caller observations, stored records, events, and session state |
+
+The UI owns browser-session state and creates the graph. The graph coordinates the reasoner and
+repository; deterministic SOP code owns access and phase changes. Model output is validated at
+the LLM boundary. Observability records execution without deciding business state. Shared schemas
+have no dependency on UI, model clients, or telemetry.
+
+Keep resources next to their loader. `data.FIXTURES` is the shared fixture location for record
+access and telemetry masking. `llm/reasoner.py` loads its adjacent `prompts/`. The application
+package defines `PROJECT_ROOT` once for project configuration and entry-point lookup.
+
+`evals/` owns the command-line runner, scenario contracts, `cases/`, rubric, and review history.
+Run it with `uv run python -m evals`; `--list` requires no model call. `tests/` groups offline tests
+by the subsystem exercised and keeps shared fixtures in `conftest.py`.
+
+### Design references
+
+The layout applies the following patterns to this Streamlit application:
+
+- [BCG X's AgentKit article](https://www.langchain.com/blog/bcg-x-releases-agentkit-a-full-stack-starter-kit-for-building-constrained-agents)
+  describes a constrained agent with a separate chat UI and backend. Its
+  [backend layout](https://github.com/BCG-X-Official/agentkit/tree/80f4a0bb192b0a49269113d57cfdde87903316a0/backend/app/app)
+  groups services, data access, and schemas by responsibility. AgentKit is archived; it is an
+  architectural reference here.
+- [Vercel's AI SDK 4.0 article](https://vercel.com/blog/ai-sdk-4-0#updated-chatbot-template)
+  links a working chatbot product. The inspected
+  [repository](https://github.com/vercel/ai-chatbot/tree/c2f8235e1f3ea903ad8b7f61447c4f74164b5c58)
+  separates chat components, `lib/ai`, `lib/db`, and test groups. This informs the UI, LLM, data,
+  and test boundaries above.
+- [LangGraph's application structure guide](https://docs.langchain.com/oss/python/langgraph/application-structure)
+  keeps graph construction in a clear module with supporting code in packages. Here,
+  `workflow/graph.py` is that module, and package names identify their responsibilities.
+
+## Connection ownership
+
+`llm.model.load_model_settings` resolves a UI key override before environment variables and the project
+`.env` file. The default model is `anthropic/claude-sonnet-4.6`. `create_model` rejects an empty key
+before constructing the OpenRouter client. Configuration loading makes no API call.
+
+`ui/connection.py` owns the masked key-entry form. The override lives in Streamlit session state,
+separate from the business `Session`, prompts, traces, and downloaded outcomes. It never mutates
+environment variables or writes `.env`. Server credentials are not sent to the password widget.
+Replacing or clearing the key discards the cached workflow client while preserving conversation
+state. A new conversation clears the graph and traces but retains the key override. With no key,
+chat and clock submissions are disabled. Clearing an override restores the configured server key,
+if present. OpenRouter validates the credential on the first model request.
+
+See the [delivery guide](delivery-guide.md) for setup, credential lifetime, and the demo
+walkthrough.
+
 ## Model boundaries
 
 The interpreter receives dialogue, identity memory, optional caller case hints, current selected
-case ID, phase, and last action. It emits an `Observation` containing identity and case-hint patches,
+case ID, phase, and last action. It emits an `Observation` containing identity and case-hint
+patches,
 explicit retractions, optional identity clarifications, multiple guidance topics, scope, and bounded
 conversational choices. It has no customer registry,
 authoritative claim object, or phase-setting fields. Extraction runs in every phase; clock events
@@ -43,11 +106,13 @@ old turns. A failed model call remains an atomic failed turn, not a silent loss 
 
 The response model knows the whole four-stage journey and receives the current phase prompt,
 code-selected action, only that action's instructions, topic-selected authorized evidence, optional
-case hints, and follow-up state. `prompts/actions.json` supplies the current instruction; unrelated
+case hints, and follow-up state. `llm/prompts/actions.json` supplies the current instruction; unrelated
 actions are not included in the response prompt.
-It selects relevant guidance and may answer multiple questions in one response. It emits `DraftReply`
+It selects relevant guidance and may answer multiple questions in one response. It emits
+`DraftReply`
 with text and evidence references. Outcome facts and next steps are copied from referenced evidence.
-Invalid references fail the turn. Scope rejections, final email confirmations, and handoff/exit replies
+Invalid references fail the turn. Scope rejections, final email confirmations, and handoff/exit
+replies
 are deterministic. Normal turns use two calls; clock events use at most the response call.
 
 ### Guidance selection and topic reduction
@@ -100,9 +165,10 @@ closes before the question is answered.
 
 ### Streaming and diagnostics
 
-`llm_calls.py` binds the JSON schema, streams raw response chunks, collects provider usage metadata,
+`llm/calls.py` binds the JSON schema, streams raw response chunks, collects provider usage metadata,
 and validates the completed JSON with Pydantic. Response schemas restrict evidence-reference arrays
-to the IDs authorized for that call (and next steps to guidance/next-step IDs, excluding claim facts); no available IDs means an
+to the IDs authorized for that call (and next steps to guidance/next-step IDs, excluding claim
+facts); no available IDs means an
 empty array. Application validation independently enforces those restrictions before saving.
 The call emits start/delta/finish diagnostics through
 [LangGraph custom streaming](https://reference.langchain.com/python/langgraph/types/StreamWriter).
@@ -133,22 +199,28 @@ phase progression. Neither path grants access or claims that an external action 
 
 ## Data and time
 
-`FixtureRepository.claims_for` and `claim_for` enforce access and customer ownership. Claim status is
-read-only. Document requirements use canonical identifiers shared with guideline keys; display labels
-are separate. All applicable guidance is supplied together, with document-specific instructions only for
+`FixtureRepository.claims_for` and `claim_for` enforce access and customer ownership. Claim status
+is
+read-only. Document requirements use canonical identifiers shared with guideline keys; display
+labels
+are separate. All applicable guidance is supplied together, with document-specific instructions only
+for
 documents actually requested on that claim. Fixture topic labels are evidence identifiers, not a
 required classifier. Monetary values are decimal USD strings in fixtures.
 
 Representative identity is limited to the supplied relationship fixture plus matching policyholder
 PII and simulated consent. The default sequence is pending then approved; timeout stays pending.
-The fake clock starts at March 10, 2026, and moves only on an Advance time event. Consent expires after
+The fake clock starts at March 10, 2026, and moves only on an Advance time event. Consent expires
+after
 120 seconds. Status checks are eligible every 10 seconds; expiry takes precedence over approval.
-Claim appeal deadlines affect guidance, not the phase. There is no real timer or notification worker.
+Claim appeal deadlines affect guidance, not the phase. There is no real timer or notification
+worker.
 
 ## Limits and extension points
 
 The state is ephemeral and scoped to one browser session. Real persistence would replace that owner
-with a server session store or a LangGraph checkpointer, retaining isolation and failed-turn behavior.
+with a server session store or a LangGraph checkpointer, retaining isolation and failed-turn
+behavior.
 Real verification, consent, email, and transfer require service implementations and their own access
 contracts. No model output is a substitute for those service results.
 

@@ -1,0 +1,14 @@
+{
+  "confirm_caller_role": "Ask whether the caller is the policyholder or calling for someone else.",
+  "collect_identity": "ask for enough missing fields to reach three. Accept name, DOB, phone, email, or ID last four. Explain privacy briefly, answer process questions, and offer alternate fields. All supplied identity fields, including policy number, are unconfirmed until verified. Say \"you've shared your name/policy number\", never \"on file\", \"matched\", or \"that counts as one\". Ask for enough additional fields to attempt three matches; do not claim supplied values matched.",
+  "verification_mismatch": "The supplied combination has already failed verification. Explain that result and ask for a correction or another permitted field. Do not say the check is about to run, reveal stored answers, or identify which fields matched.",
+  "verification_limit": "Explain the demo's attempt limit and offer a human-support request or ending the chat.",
+  "collect_representative": "Ask the representative's full name, not claim information.",
+  "representative_unavailable": "Explain that this demo cannot establish representative access and offer human support. Do not disclose whether a different representative is registered.",
+  "wait_consent": "The latest authorization check is complete and permission is still pending. Policyholder details matched, but representative access is not granted and no claim facts are available. Explain that this demo uses simulated consent and no actual request was sent. The available next steps are the UI Advance time control to poll again, a human-support request, or ending the conversation. Polling can remain pending or time out; do not predict approval. Neither the caller nor the policyholder can approve this simulation by responding in chat or elsewhere; do not ask them to act on a nonexistent request.",
+  "clarify_case": "Use remembered hints, present the authorized candidates, and ask one focused selection question.",
+  "case_not_found": "No matching claim was returned. If offer_human is true, offer a human-support request; otherwise ask for a corrected clue or reference. Do not promise more clues will reveal a claim, invent unsupported claim types, or discuss another customer.",
+  "answer_case": "Answer the pending questions, then check whether the caller needs anything else. For an unexplained discrepancy, state the record and its limits; offer human support without adding an unsupported investigation or submission procedure.",
+  "offer_email": "Present the optional summary and request confirmation or change of the remembered send/skip choice.",
+  "answer_then_offer_email": "Answer the new question before renewing the optional summary choice. Acknowledge any accompanying send/skip preference without closing prematurely."
+}

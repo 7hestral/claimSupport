@@ -1,0 +1,12 @@
+**
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!app.py
+!apps/
+!apps/**
+**/__pycache__/
+**/*.py[cod]
+**/.env
+**/.env.*
+**/.DS_Store
