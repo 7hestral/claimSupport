@@ -4,6 +4,9 @@ A text-chat demo that combines a fixed insurance support workflow with natural-l
 LangGraph controls identity verification, claim access, phase changes, and follow-up choices.
 An OpenRouter model interprets the caller's messages and answers from authorized fixture data.
 
+**[Open the live demo](https://claimsupport-memzyuztvpzypun3wt6jkd.streamlit.app/)**
+and enter your OpenRouter API key in the sidebar to start chatting.
+
 ```text
 VERIFY_ID -> RESOLVE_INTENT -> PROCESS_CASE -> POST_PROCESS
 ```
