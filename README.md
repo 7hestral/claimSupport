@@ -98,6 +98,8 @@ apps/insurance_claims/
   presentation.py              model context, outcome, email draft, and inspector
   reasoner.py                   two structured calls to the same model
   llm_calls.py                  streaming, output validation, token usage, and call events
+  monitoring.py                 Langfuse turn, generation, and decision observations
+  trace_privacy.py              fixture identity masking at telemetry export
   context.py                    bounded dialogue windows
   debug_ui.py                   local model traces and token totals
   model.py                     OpenRouter configuration
@@ -126,9 +128,13 @@ uv run python -m scripts.live_smoke --case all
 ```
 
 See [test coverage and review criteria](test_cases/README.md) and the reusable natural-language
-[scenario collection](test_cases/conversations.json). Live checks save replies and authorized
-evidence to `outputs/live-conversations.json` for qualitative review. State assertions alone do not
-grade empathy or prove factual grounding.
+[original scenarios](test_cases/conversations.json). The runner also loads the identity, claim
+resolution, document recovery, and scope/consent collections in `test_cases/`; use `--list` to see
+all cases or `--case <id> <id>` to select a group. Live checks save before/after state, replies,
+authorized evidence, and the actual email draft to `outputs/live-conversations.json`.
+Use the repository's [SOP review skill](.agents/skills/sop-eval-review/SKILL.md) and
+[behavioral rubric](test_cases/rubric.md) to grade those artifacts. Deterministic checks enforce
+business gates and field population; text review judges meaning without exact-wording snapshots.
 
 There is no turn-count limit. Model history uses a sliding window of up to 24,000 JSON characters;
 the latest message and structured caller memory are always included. The full transcript remains
@@ -140,3 +146,24 @@ metadata. During a turn, a live debug panel streams raw JSON; the customer reply
 validation. Failed-call diagnostics survive a failed turn. Missing token metadata is shown as
 unavailable. Raw debug inputs contain supplied identity details; this is a local tester console.
 New conversation clears the traces. No API key or transport headers are recorded.
+
+## Langfuse monitoring
+
+Set `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL` in the project `.env`.
+Tracing starts automatically for UI turns and live evaluation runs. Environment variables override
+the file; `LANGFUSE_TRACING_ENABLED=false` explicitly disables export. Missing keys leave monitoring
+off, while a partially configured setup is rejected. Restart the app after changing credentials.
+
+Each conversation is a Langfuse session. Each turn has a `support-turn` trace containing
+`extract-facts` and `compose-reply` generations and an `apply-sop` decision span. Fixed replies skip
+the response generation. Generations contain the actual prompts, context, output schema, prompt
+hash, model, usage, and latency; the decision span records interpreted facts, authorization, and
+allowed evidence. Root metadata includes before/after state and the final summary draft. Filter by
+`insurance-sop`, `evaluation`/`ui`, and scenario `case_id`. Live reports include direct trace links
+and flush the exporter before exiting. Langfuse cost totals depend on its model-pricing match.
+
+Export masking pseudonymizes known fixture identity values and common email/phone forms while
+preserving differences between identities. Model inputs and SOP state are never changed by masking.
+This is a fixture-data demo, not a general PII detector: arbitrary names and unrecognized identity
+formats in free text are not guaranteed to be removed. Use the provided synthetic callers.
+Offline tests disable remote export; the instrumentation test uses an in-memory SDK exporter.

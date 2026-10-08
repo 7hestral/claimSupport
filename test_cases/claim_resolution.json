@@ -1,0 +1,189 @@
+[
+  {
+    "id": "ambiguous_january",
+    "review": "Two January healthcare claims must lead to a focused clarification rather than guessing. Use the year answer without restarting identity or intake. Explain the settled 2025 claim and 780 USD paid. If other amounts are discussed, preserve their meanings: expected 780, allowed maximum 800, net fee 800 USD. Do not require all amounts to be recited or infer patient debt.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. DOB 1985-03-15 and SSN last four 4472. What's the status of my January healthcare claim?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.phase": "RESOLVE_INTENT",
+          "session.selected_case_id": null
+        }
+      },
+      {
+        "event": {
+          "text": "The earlier one, January 2025. Has it been paid, and how much?"
+        },
+        "expect": {
+          "session.selected_case_id": "CL-2011",
+          "session.phase": "PROCESS_CASE",
+          "session.outcome.claim_status": "closed"
+        },
+        "present": [
+          "session.memory.intent_hint"
+        ]
+      },
+      {
+        "event": {
+          "text": "That answers my claim questions; I'm ready to wrap up."
+        },
+        "expect": {
+          "session.phase": "POST_PROCESS",
+          "session.follow_up.email_choice": "pending"
+        },
+        "present": [
+          "session.follow_up.email_draft",
+          "session.outcome.claim_status",
+          "session.outcome.discussed"
+        ]
+      },
+      {
+        "event": {
+          "text": "Skip the summary email, please."
+        },
+        "expect": {
+          "session.disposition": "completed",
+          "session.follow_up.email_choice": "skip",
+          "session.follow_up.delivery": "not_requested"
+        }
+      }
+    ]
+  },
+  {
+    "id": "national_id_claim",
+    "review": "Use national-ID verification for Ma Tian and process CL-3001. Discuss the diagnosis report, not Margaret's pathology report/office note. For required report contents, distinguish available generic guidance from absent diagnosis-specific rules.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Ma Tian, the policyholder. DOB 1964-09-10, national ID last four 6688. Why was my March healthcare claim denied?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P12",
+          "session.selected_case_id": "CL-3001",
+          "session.phase": "PROCESS_CASE",
+          "session.outcome.claim_status": "denied"
+        }
+      },
+      {
+        "event": {
+          "text": "What does that report need to include?"
+        },
+        "expect": {
+          "session.selected_case_id": "CL-3001",
+          "session.phase": "PROCESS_CASE"
+        }
+      }
+    ]
+  },
+  {
+    "id": "payment_switch",
+    "review": "The open auto claim expects 3200 USD but has paid 0; maximum and net fee are 3500. Do not promise payment or equate net fee with patient debt. Switch to the closed dental claim (425 paid, 450 maximum/net fee) without reverifying; replace the outcome and exclude old auto facts from its summary.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder, DOB 1985-03-15, SSN last four 4472. For my February auto claim, has the insurer already paid the expected amount?"
+        },
+        "expect": {
+          "session.selected_case_id": "CL-2102",
+          "session.outcome.claim_status": "open",
+          "session.phase": "PROCESS_CASE"
+        }
+      },
+      {
+        "event": {
+          "text": "Now switch to my dental claim. How much was actually paid versus the allowed maximum?"
+        },
+        "expect": {
+          "session.selected_case_id": "CL-1899",
+          "session.outcome.claim_status": "closed",
+          "session.phase": "PROCESS_CASE",
+          "session.verification.verified_party_id": "P9"
+        }
+      },
+      {
+        "event": {
+          "text": "That answers my claim questions; I'm ready to wrap up."
+        },
+        "expect": {
+          "session.phase": "POST_PROCESS",
+          "session.follow_up.email_choice": "pending"
+        },
+        "present": [
+          "session.follow_up.email_draft",
+          "session.outcome.claim_status",
+          "session.outcome.discussed"
+        ]
+      },
+      {
+        "event": {
+          "text": "Skip the summary email, please."
+        },
+        "expect": {
+          "session.disposition": "completed",
+          "session.follow_up.email_choice": "skip",
+          "session.follow_up.delivery": "not_requested"
+        }
+      }
+    ]
+  },
+  {
+    "id": "unknown_answer",
+    "review": "When asked for an adjuster name and exact callback time, acknowledge that the available record does not establish them; record the unresolved need instead of inventing details or a callback. The optional summary should retain the unresolved question along with discussion, status, and any recommended steps.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. My DOB is 1985-03-15 and SSN last four is 4472. I need help with my denied January healthcare claim."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.selected_case_id": "CL-2048",
+          "session.phase": "PROCESS_CASE"
+        }
+      },
+      {
+        "event": {
+          "text": "What is the full name of the adjuster assigned to this claim, and exactly when will they call me?"
+        },
+        "expect": {
+          "session.phase": "PROCESS_CASE",
+          "session.disposition": "active"
+        },
+        "present": [
+          "session.outcome.unresolved_questions"
+        ]
+      },
+      {
+        "event": {
+          "text": "That answers my claim questions; I'm ready to wrap up."
+        },
+        "expect": {
+          "session.phase": "POST_PROCESS",
+          "session.follow_up.email_choice": "pending"
+        },
+        "present": [
+          "session.follow_up.email_draft",
+          "session.outcome.claim_status",
+          "session.outcome.discussed"
+        ]
+      },
+      {
+        "event": {
+          "text": "Yes, please send the summary."
+        },
+        "expect": {
+          "session.disposition": "completed",
+          "session.follow_up.email_choice": "send",
+          "session.follow_up.delivery": "simulated_only"
+        },
+        "present": [
+          "session.follow_up.recipient",
+          "session.follow_up.email_draft",
+          "session.outcome.unresolved_questions"
+        ]
+      }
+    ]
+  }
+]

@@ -9,6 +9,8 @@ dependencies = [
     "pydantic>=2,<3",
     "python-dotenv>=1,<2",
     "streamlit>=1.45,<2",
+    "langfuse==4.17.0",
+    "langchain>=1,<2",
 ]
 
 [tool.uv]

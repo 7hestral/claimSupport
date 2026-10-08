@@ -1,0 +1,112 @@
+[
+  {
+    "id": "document_alternatives",
+    "review": "Offer applicable pathology/office-note replacement and substitute options without promising approval. When originals and reasonable substitutes are exhausted, acknowledge the difficulty and offer human review rather than repeating the same request. Honor the handoff.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. My DOB is 1985-03-15 and SSN last four is 4472. I need help with my denied January healthcare claim."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.selected_case_id": "CL-2048",
+          "session.phase": "PROCESS_CASE"
+        }
+      },
+      {
+        "event": {
+          "text": "I don't have the original pathology report or office note. What replacement copies or substitute records could I try?"
+        },
+        "expect": {
+          "session.phase": "PROCESS_CASE"
+        },
+        "present": [
+          "session.outcome.discussed"
+        ]
+      },
+      {
+        "event": {
+          "text": "I've checked with the hospital, lab and clinic. They cannot reissue anything, and I have no readable copies, visit summaries, discharge papers or other substitutes. I'm really upset and stuck. What now?"
+        },
+        "expect": {
+          "session.phase": "PROCESS_CASE",
+          "plan.offer_human": true
+        }
+      },
+      {
+        "event": {
+          "text": "Yes, please get me a human representative."
+        },
+        "expect": {
+          "session.disposition": "handoff_requested"
+        }
+      }
+    ]
+  },
+  {
+    "id": "timing_before_deadline",
+    "review": "Distinguish when to submit from review time after receipt. On March 15 the one-week suggestion must be bounded by the recorded March 18 deadline. Processing is usually less than a week, with intake/review qualifications; no guaranteed outcome or invented deadline extension.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. My DOB is 1985-03-15 and SSN last four is 4472. I need help with my denied January healthcare claim."
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.selected_case_id": "CL-2048",
+          "session.phase": "PROCESS_CASE"
+        }
+      },
+      {
+        "event": {
+          "text": "By what date should I submit the missing documents?"
+        },
+        "expect": {
+          "session.phase": "PROCESS_CASE",
+          "session.disposition": "active"
+        }
+      },
+      {
+        "event": {
+          "text": "And how long does review usually take after you receive them?"
+        },
+        "expect": {
+          "session.phase": "PROCESS_CASE",
+          "session.disposition": "active"
+        }
+      }
+    ],
+    "setup": {
+      "now": "2026-03-15T10:00:00Z"
+    }
+  },
+  {
+    "id": "expired_deadline",
+    "review": "On March 19 the March 18 deadline is past. Explain the recorded date and human review options. Do not offer a new week to submit, promise ordinary processing time, guarantee reopening, or claim late-appeal eligibility.",
+    "steps": [
+      {
+        "event": {
+          "text": "I'm Margaret Chen, the policyholder. My DOB is 1985-03-15 and SSN last four is 4472. I need help with my denied January healthcare claim. By when do I need to submit the missing documents?"
+        },
+        "expect": {
+          "session.verification.verified_party_id": "P9",
+          "session.selected_case_id": "CL-2048",
+          "session.phase": "PROCESS_CASE",
+          "plan.offer_human": true
+        }
+      },
+      {
+        "event": {
+          "text": "If I send them today, how long until the denial is reconsidered?"
+        },
+        "expect": {
+          "session.phase": "PROCESS_CASE",
+          "plan.offer_human": true
+        }
+      }
+    ],
+    "setup": {
+      "now": "2026-03-19T10:00:00Z"
+    }
+  }
+]

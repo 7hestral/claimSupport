@@ -5,10 +5,19 @@ from collections import deque
 import pytest
 from langchain_core.messages import AIMessageChunk
 
+from apps.insurance_claims.monitoring import monitoring_client
 from apps.insurance_claims.repository import FixtureRepository
 from apps.insurance_claims.schemas.facts import CallerFacts, Observation
 from apps.insurance_claims.schemas.state import DraftReply, Event, Session
 from apps.insurance_claims.workflow import build_workflow
+
+
+@pytest.fixture(autouse=True)
+def disable_external_monitoring(monkeypatch):
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
+    monitoring_client.cache_clear()
+    yield
+    monitoring_client.cache_clear()
 
 
 class ScriptedReasoner:
@@ -81,7 +90,7 @@ def streaming_model():
         def bind(self, **kwargs):
             return self
 
-        def stream(self, messages):
+        def stream(self, messages, config=None):
             response, usage = self.responses.popleft()
             if isinstance(response, Exception):
                 yield AIMessageChunk(content='{"reply":"partial')

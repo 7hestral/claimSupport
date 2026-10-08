@@ -16,7 +16,7 @@ def test_long_chat_windows_model_input_without_losing_memory(margaret):
         def bind(self, **kwargs):
             return self
 
-        def stream(self, messages):
+        def stream(self, messages, config=None):
             self.context = json.loads(messages[-1]["content"])
             yield AIMessageChunk(content=Observation().model_dump_json())
 

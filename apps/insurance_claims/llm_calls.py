@@ -8,6 +8,7 @@ from uuid import uuid4
 from langchain_core.utils.function_calling import convert_to_json_schema
 from pydantic import Field
 
+from .monitoring import generation_config
 from .schemas.facts import OutputModel, StrictModel
 
 TraceSink = Callable[[dict], None]
@@ -58,7 +59,9 @@ def structured_call(
     started = perf_counter()
     combined = None
     try:
-        for chunk in model.bind(response_format=response_format).stream(messages):
+        for chunk in model.bind(response_format=response_format).stream(
+            messages, config=generation_config(stage, messages, response_format)
+        ):
             combined = chunk if combined is None else combined + chunk
             text = chunk.text
             trace.output_text += text

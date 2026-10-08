@@ -86,3 +86,26 @@ def test_ui_retains_failed_call_diagnostics_without_committing_state(streaming_m
     assert any(code.value == '{"reply":"partial' for code in app.code)
     app.button[0].click().run()
     assert "llm_traces" not in app.session_state
+
+
+def test_streaming_ui_commits_successful_turn_with_monitoring_boundary(streaming_model, margaret):
+    graph = build_workflow(
+        OpenRouterReasoner(
+            streaming_model(
+                (margaret, {"input_tokens": 11, "output_tokens": 5, "total_tokens": 16}),
+                (
+                    DraftReply(reply="Recorded denial.", discussed_evidence_ids=["claim.denial"]),
+                    None,
+                ),
+            )
+        ),
+        FixtureRepository(),
+    )
+    app = AppTest.from_file("../app.py").run()
+    app.session_state["workflow"] = graph
+    app.chat_input[0].set_value("Margaret fixture").run()
+    assert not app.exception
+    assert not app.error
+    assert app.session_state["conversation"].selected_case_id == "CL-2048"
+    assert app.session_state["conversation"].messages[-1].content == "Recorded denial."
+    assert len(app.session_state["llm_traces"]) == 2

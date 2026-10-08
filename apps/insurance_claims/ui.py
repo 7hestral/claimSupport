@@ -7,6 +7,7 @@ import streamlit as st
 
 from .debug_ui import debug_console, record_event
 from .model import create_model
+from .monitoring import observe_turn
 from .presentation import inspector
 from .reasoner import OpenRouterReasoner
 from .repository import FixtureRepository
@@ -29,26 +30,28 @@ def submit(event: Event) -> None:
                 OpenRouterReasoner(create_model()), FixtureRepository()
             )
         result = None
-        for mode, update in st.session_state.workflow.stream(
-            {"session": st.session_state.conversation, "event": event},
-            stream_mode=["custom", "updates"],
-        ):
-            if mode == "custom":
-                trace = record_event(traces, update)
-                if update["type"] == "start":
-                    with live_debug.container():
-                        st.caption(
-                            f"Live debug · {trace.stage} · {trace.model} · unvalidated output"
-                        )
-                        with st.expander("Input messages and output schema"):
-                            st.json(trace.messages, expanded=False)
-                            st.json(trace.response_format, expanded=False)
-                        output = st.empty()
-                output.code(trace.output_text, language="json")
-            elif "record" in update:
-                result = update["record"]
-        if result is None:
-            raise RuntimeError("Workflow ended without a recorded turn.")
+        with observe_turn(st.session_state.conversation, event, source="ui") as turn_trace:
+            for mode, update in st.session_state.workflow.stream(
+                {"session": st.session_state.conversation, "event": event},
+                stream_mode=["custom", "updates"],
+            ):
+                if mode == "custom":
+                    trace = record_event(traces, update)
+                    if update["type"] == "start":
+                        with live_debug.container():
+                            st.caption(
+                                f"Live debug · {trace.stage} · {trace.model} · unvalidated output"
+                            )
+                            with st.expander("Input messages and output schema"):
+                                st.json(trace.messages, expanded=False)
+                                st.json(trace.response_format, expanded=False)
+                            output = st.empty()
+                    output.code(trace.output_text, language="json")
+                elif "record" in update:
+                    result = update["record"]
+            if result is None:
+                raise RuntimeError("Workflow ended without a recorded turn.")
+            turn_trace.finish(result["session"])
     except Exception as error:  # noqa: BLE001 - one outer UI boundary, with a visible failure.
         # UI boundary: do not display SDK request bodies, secrets, or partial graph state.
         st.error(

@@ -14,7 +14,22 @@
           "session.memory.case_month": 1,
           "session.memory.case_type": "healthcare",
           "session.memory.case_status": "denied"
-        }
+        },
+        "includes": {
+          "session.verification.matched_fields": [
+            "full_name",
+            "dob",
+            "id_last4"
+          ],
+          "session.phase_history": [
+            "VERIFY_ID",
+            "RESOLVE_INTENT",
+            "PROCESS_CASE"
+          ]
+        },
+        "present": [
+          "session.memory.intent_hint"
+        ]
       },
       {
         "event": {
@@ -33,7 +48,14 @@
           "session.disposition": "completed",
           "session.follow_up.email_choice": "send",
           "session.follow_up.delivery": "simulated_only"
-        }
+        },
+        "present": [
+          "session.follow_up.email_draft",
+          "session.follow_up.recipient",
+          "session.outcome.claim_status",
+          "session.outcome.discussed",
+          "session.outcome.next_steps"
+        ]
       }
     ]
   },
@@ -51,7 +73,10 @@
           "session.memory.case_status": "denied",
           "session.memory.case_type": "healthcare",
           "session.verification.verified_party_id": null
-        }
+        },
+        "present": [
+          "session.memory.intent_hint"
+        ]
       },
       {
         "event": {
@@ -173,7 +198,8 @@
         "expect": {
           "observation.refuses_verification": true,
           "session.phase": "VERIFY_ID",
-          "session.recovery_attempts": 2
+          "session.recovery_attempts": 2,
+          "plan.offer_human": true
         }
       },
       {

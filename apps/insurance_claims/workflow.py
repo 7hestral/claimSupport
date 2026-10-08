@@ -7,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import StreamWriter
 
 from .memory import merge_memory
+from .monitoring import record_decision
 from .policy import TurnPlan, plan_turn
 from .presentation import response_context, save_response
 from .reasoner import Reasoner
@@ -43,7 +44,9 @@ def build_workflow(reasoner: Reasoner, repository: FixtureRepository):
         return {"session": session, "observation": observation}
 
     def decide(state: TurnState) -> dict:
-        return {"plan": plan_turn(state["session"], state["observation"], repository)}
+        plan = plan_turn(state["session"], state["observation"], repository)
+        record_decision(state["session"], state["observation"], plan)
+        return {"plan": plan}
 
     def compose(state: TurnState, writer: StreamWriter) -> dict:
         plan = state["plan"]

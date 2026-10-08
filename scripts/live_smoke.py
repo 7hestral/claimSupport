@@ -1,76 +1,68 @@
-"""Real-model scenarios: assert state contracts and save replies for qualitative review."""
+"""Run real-model state checks and save reviewable transcripts for the SOP review skill."""
 
 import argparse
-import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from apps.insurance_claims.model import create_model
+from apps.insurance_claims.monitoring import flush_monitoring
 from apps.insurance_claims.reasoner import OpenRouterReasoner
 from apps.insurance_claims.repository import FixtureRepository
-from apps.insurance_claims.schemas.state import Event, Session
 from apps.insurance_claims.workflow import build_workflow
-
-SCENARIOS = Path(__file__).resolve().parents[1] / "test_cases/conversations.json"
+from scripts.eval_cases import load_cases, run_case, write_report
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--case", default="recovery", help="Scenario ID, or all (uses model credits)"
-    )
+    parser.add_argument("--case", nargs="+", default=["recovery"], help="Scenario IDs, or all")
+    parser.add_argument("--list", action="store_true", help="List cases without model calls")
     parser.add_argument("--output", type=Path, default=Path("outputs/live-conversations.json"))
     args = parser.parse_args()
-    scenarios = json.loads(SCENARIOS.read_text())
-    selected = [case for case in scenarios if args.case in {"all", case["id"]}]
-    if not selected:
-        parser.error(f"Unknown scenario; choose from {[case['id'] for case in scenarios]} or all")
-    graph = build_workflow(OpenRouterReasoner(create_model()), FixtureRepository())
-    reports = []
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    cases = load_cases()
+    if args.list:
+        for case in cases:
+            print(f"{case.id}: {len(case.steps)} events — {case.review}")
+        return
+    unknown = set(args.case) - {"all", *(case.id for case in cases)}
+    if unknown:
+        parser.error(f"Unknown scenarios: {sorted(unknown)}; use --list")
+    selected = [case for case in cases if "all" in args.case or case.id in args.case]
+    model = create_model()
+    graph = build_workflow(OpenRouterReasoner(model), FixtureRepository())
+    report = {
+        "format_version": 1,
+        "started_at": datetime.now(UTC).isoformat(),
+        "model": model.model_name,
+        "selected_cases": [case.id for case in selected],
+        "execution_status": "running",
+        "semantic_review": "pending",
+        "cases": [],
+    }
+    failures = 0
     for case in selected:
-        session = Session()
-        report = {"id": case["id"], "review": case["review"], "turns": []}
-        reports.append(report)
-        for index, step in enumerate(case["steps"], start=1):
-            result = graph.invoke({"session": session, "event": Event(**step["event"])})
-            session = result["session"]
-            actual = {
-                "session": session.model_dump(mode="json"),
-                "observation": result["observation"].model_dump(mode="json"),
-            }
-            failures = []
-            for path, expected in step["expect"].items():
-                value = actual
-                for key in path.split("."):
-                    value = value[key]
-                if value != expected:
-                    failures.append(f"{path}: expected {expected!r}, got {value!r}")
-            reply = session.messages[-1].content
-            if session.verification.verified_party_id is None:
-                if result["plan"].evidence or result["plan"].candidates:
-                    failures.append("Protected evidence supplied before verification")
-                if any(
-                    term in reply.casefold() for term in ["pathology", "office note", "cl-2048"]
-                ):
-                    failures.append("Protected fixture detail in unverified reply")
-            report["turns"].append(
-                {
-                    "event": step["event"],
-                    "reply": reply,
-                    "observation": result["observation"].model_dump(mode="json"),
-                    "phase": session.phase.value,
-                    "action": session.last_action,
-                    "evidence": [entry.model_dump() for entry in result["plan"].evidence],
-                    "failures": failures,
-                }
-            )
-            args.output.write_text(json.dumps(reports, indent=2) + "\n")
-            print(
-                f"{case['id']} turn {index}: {session.phase.value} / {session.last_action}",
-                flush=True,
-            )
-            assert not failures, "; ".join(failures)
-    print(f"State checks passed. Review empathy and factual wording in {args.output}.", flush=True)
+        case_report = {
+            "id": case.id,
+            "review": case.review,
+            "setup": case.setup.model_dump(mode="json", exclude_none=True),
+            "expected_events": len(case.steps),
+            "turns": [],
+        }
+        report["cases"].append(case_report)
+        for turn in run_case(graph, case):
+            case_report["turns"].append(turn)
+            failures += len(turn["failures"])
+            write_report(args.output, report)
+            status = "; ".join(turn["failures"]) or "state checks passed"
+            print(f"{case.id} turn {turn['turn']}: {status}", flush=True)
+    report["execution_status"] = "completed_with_failures" if failures else "completed"
+    flush_monitoring()
+    report["finished_at"] = datetime.now(UTC).isoformat()
+    write_report(args.output, report)
+    print(
+        f"{failures} deterministic failures. Text review still required: {args.output}", flush=True
+    )
+    if failures:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
