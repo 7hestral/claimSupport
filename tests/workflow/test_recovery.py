@@ -71,6 +71,26 @@ def test_emotional_process_questions_reach_speaker_without_counting_as_refusal(h
     assert not context["evidence"]
 
 
+def test_repeated_identity_does_not_restart_refusal_recovery(harness):
+    turn, model, _ = harness(
+        Observation(facts=CallerFacts(full_name="Margaret Chen", caller_role="policyholder")),
+        Observation(refuses_verification=True),
+        Observation(
+            facts=CallerFacts(full_name="  MARGARET CHEN  ", caller_role="policyholder"),
+            refuses_verification=True,
+        ),
+        Observation(facts=CallerFacts(email="margaret@email.com")),
+    )
+    session = turn(turn(turn()))
+    assert session.recovery_attempts == 2
+    assert model.contexts[-1]["offer_human"]
+    assert session.verification.verified_party_id is None
+    assert not model.contexts[-1]["evidence"]
+    session = turn(session)
+    assert session.recovery_attempts == 0
+    assert not model.contexts[-1]["offer_human"]
+
+
 @pytest.mark.parametrize(
     "scenario,seconds,expected",
     [

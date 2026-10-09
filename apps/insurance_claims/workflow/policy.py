@@ -6,7 +6,7 @@ from pydantic import Field
 
 from ..data.repository import FixtureRepository
 from ..schemas.facts import Observation, StrictModel
-from ..schemas.state import Evidence, FollowUp, Outcome, Phase, Session
+from ..schemas.state import Event, Evidence, FollowUp, Outcome, Phase, Session
 from .guidance import claim_evidence
 from .identity import IDENTITY_FIELDS, authorize_representative, verify
 from .memory import transition
@@ -34,16 +34,9 @@ def handoff(session: Session, reason: str) -> TurnPlan:
     )
 
 
-def identity_plan(
-    session: Session, observation: Observation, repository: FixtureRepository
-) -> TurnPlan | None:
+def identity_plan(session: Session, repository: FixtureRepository) -> TurnPlan | None:
     if session.verification.verified_party_id:
         return None
-    made_progress = any(getattr(observation.facts, key) is not None for key in IDENTITY_FIELDS)
-    if made_progress:
-        session.recovery_attempts = 0
-    elif observation.refuses_verification:
-        session.recovery_attempts += 1
     if session.memory.caller_role is None:
         return TurnPlan(action="confirm_caller_role", offer_human=session.recovery_attempts >= 2)
     if session.verification.failed_attempts >= 3:
@@ -121,7 +114,7 @@ def resolve_case(session: Session, repository: FixtureRepository) -> TurnPlan | 
 
 
 def plan_turn(
-    session: Session, observation: Observation, repository: FixtureRepository
+    session: Session, observation: Observation, repository: FixtureRepository, event: Event
 ) -> TurnPlan:
     follow_up = session.follow_up
     if (
@@ -164,6 +157,18 @@ def plan_turn(
                 "demo clock. No email was sent. Start a new conversation to continue."
             ),
         )
+    if event.kind == "advance_time" and follow_up.offer_status == "pending":
+        seconds = int((follow_up.expires_at - session.now).total_seconds())
+        unit = "second" if seconds == 1 else "seconds"
+        return TurnPlan(
+            action="offer_email",
+            fixed_reply=(
+                f"You have {seconds} {unit} left on the demo clock to confirm send or skip "
+                f"for the summary to {follow_up.recipient}. The choice is still pending; "
+                "if the time expires, it defaults to skip. This demo prepares a draft "
+                "and records your choice; no email is actually sent."
+            ),
+        )
     if observation.conversation_action == "request_human":
         return handoff(session, "Caller requested human support.")
     if observation.conversation_action == "end_conversation":
@@ -179,7 +184,7 @@ def plan_turn(
         if offer:
             text = "I can only help with insurance claims here. Would you like me to record a request for a human representative?"
         return TurnPlan(action="redirect_scope", offer_human=offer, fixed_reply=text)
-    blocked = identity_plan(session, observation, repository)
+    blocked = identity_plan(session, repository)
     if blocked:
         return blocked
     if session.phase == Phase.RESOLVE_INTENT:

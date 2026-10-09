@@ -2,7 +2,7 @@
 
 from ..schemas.facts import CallerFacts, CaseHints, Observation
 from ..schemas.state import Authorization, FollowUp, Outcome, Phase, Session
-from .identity import AUTH_FIELDS, normalize, phone_digits
+from .identity import AUTH_FIELDS, IDENTITY_FIELDS, normalize, phone_digits
 
 
 def transition(session: Session, phase: Phase) -> None:
@@ -19,17 +19,26 @@ def merge_memory(session: Session, observation: Observation) -> None:
         updated[key] = None
     updated.update(observation.facts.model_dump(exclude_none=True))
     session.memory = CallerFacts.model_validate(updated)
-    identity_changed = any(
-        before[key] != updated[key]
+    changed_fields = {
+        key
+        for key in AUTH_FIELDS
+        if before[key] != updated[key]
         and (
             before[key] is None
             or updated[key] is None
             or (phone_digits if key == "phone" else normalize)(before[key])
             != (phone_digits if key == "phone" else normalize)(updated[key])
         )
-        for key in AUTH_FIELDS
-    )
-    if identity_changed:
+    }
+    if observation.scope != "out_of_scope" and not had_claim_access:
+        made_progress = any(
+            key in changed_fields and updated[key] is not None for key in IDENTITY_FIELDS
+        )
+        if made_progress:
+            session.recovery_attempts = 0
+        elif observation.refuses_verification:
+            session.recovery_attempts += 1
+    if changed_fields:
         session.verification.verified_party_id = None
         session.verification.matched_fields = []
         session.authorization = Authorization()

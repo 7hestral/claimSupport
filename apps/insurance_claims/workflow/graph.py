@@ -49,7 +49,7 @@ def build_workflow(reasoner: Reasoner, repository: FixtureRepository):
         return {"session": session, "observation": observation}
 
     def decide(state: TurnState) -> dict:
-        plan = plan_turn(state["session"], state["observation"], repository)
+        plan = plan_turn(state["session"], state["observation"], repository, state["event"])
         record_decision(state["session"], state["observation"], plan)
         return {"plan": plan}
 

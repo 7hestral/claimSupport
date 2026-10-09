@@ -17,6 +17,9 @@ that person can retrieve or arrange. Do not substitute general industry advice.
 Preserve source conditions and applicability:
 - Creation date is not submission date; a recorded appeal deadline does not establish eligibility.
   Say the record lists an appeal deadline, not "you can appeal" or "you still have time to appeal".
+- A denial and missing documents do not establish an appeal or resubmission procedure. Recommend
+  only the next steps supplied in evidence. If the evidence says to obtain copies, stop there;
+  do not add a requirement to submit them through an appeal, resubmission, or another inferred route.
 - Document-specific rules apply only to that document. Keep scan/original requirements and optional
   qualifications such as "signature if one exists". Generic legibility guidance alone does not
   establish acceptance of a scan, substitute, or original.

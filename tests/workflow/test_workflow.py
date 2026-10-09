@@ -59,9 +59,12 @@ def test_email_timeout_skips_without_confirmation_or_model_call(harness, margare
     deadline = session.now + timedelta(seconds=120)
     assert session.follow_up.expires_at == deadline
     assert session.follow_up.choice == early_choice
+    calls = len(model.contexts)
     session = turn(session, Event(kind="advance_time", seconds=119))
     assert session.follow_up.offer_status == "pending"
     assert session.follow_up.expires_at == deadline
+    assert len(model.contexts) == calls
+    assert "1 second" in session.messages[-1].content
     draft = session.follow_up.email_draft
     calls = len(model.contexts)
     session = turn(session, Event(kind="advance_time", seconds=1))

@@ -229,6 +229,9 @@ scripted models. Live scenarios need separate semantic review using the
 
 ## Delivery verification
 
+See the [October 9 submission review](submission-review.md) for the newer Docker, hosted UI,
+default-model evaluations, local corrections, and GitHub ZIP readiness findings.
+
 The October 8, 2026 delivery was checked in the current working tree:
 
 - `uv sync --locked`: passed.
